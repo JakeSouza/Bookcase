@@ -58,6 +58,49 @@ export function coverUrl(coverId, size = "L") {
 }
 
 /**
+ * Normalizes user-entered OpenLibrary identifiers into a work key.
+ * Accepts "OL45804W", "/works/OL45804W", or a full openlibrary.org URL.
+ */
+function normalizeWorkKey(raw) {
+  const trimmed = raw.trim();
+  const urlMatch = trimmed.match(/\/works\/OL\w+/i);
+  if (urlMatch) return urlMatch[0];
+  if (trimmed.startsWith("/works/")) return trimmed;
+  return `/works/${trimmed.replace(/^\/+/, "")}`;
+}
+
+/**
+ * Fetches a specific OpenLibrary work by ID — used to manually re-sync
+ * a book's title, author, cover, and tags when the automatic search
+ * matched the wrong edition (or you just have the ID handy).
+ */
+export async function fetchWorkById(rawId) {
+  const key = normalizeWorkKey(rawId);
+  const res = await fetch(`https://openlibrary.org${key}.json`);
+  if (!res.ok) throw new Error(`OpenLibrary work not found (${res.status})`);
+  const data = await res.json();
+
+  let authorName = null;
+  const authorRef = data.authors?.[0]?.author?.key || data.authors?.[0]?.key;
+  if (authorRef) {
+    try {
+      const aRes = await fetch(`https://openlibrary.org${authorRef}.json`);
+      if (aRes.ok) authorName = (await aRes.json()).name;
+    } catch {
+      /* non-fatal — keep the book's existing author on failure */
+    }
+  }
+
+  return {
+    workKey: key,
+    title: data.title || null,
+    author: authorName,
+    coverId: (data.covers && data.covers[0]) || null,
+    subjects: (data.subjects || []).slice(0, 12)
+  };
+}
+
+/**
  * Best-effort single match for CSV import — takes the first search
  * result. Good enough for enrichment; the admin panel lets you fix
  * mismatches by hand.

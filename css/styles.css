@@ -253,21 +253,22 @@ button {
 .shelf-scroll {
   max-width: 1160px;
   margin: 30px auto 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 40px 22px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 128px);
+  justify-content: center;
+  column-gap: 26px;
+  row-gap: 40px;
   padding: 16px 6px 34px;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0,
-    transparent 226px,
-    var(--shelf-wood) 226px,
-    var(--shelf-wood) 233px,
-    transparent 233px,
-    transparent 236px
+    transparent 220px,
+    var(--shelf-wood) 220px,
+    var(--shelf-wood) 227px,
+    transparent 227px,
+    transparent 260px
   );
-  background-position: 0 194px;
+  background-position: 0 236px;
 }
 
 .shelf-empty {
@@ -277,13 +278,12 @@ button {
   padding: 20px 0;
 }
 
-/* Face-out book cover, tilted forward like a bookstore display shelf */
+/* Face-out book cover, evenly aligned in the shelf grid */
 .cover-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 128px;
-  flex-shrink: 0;
 }
 
 .book-cover-card {
@@ -296,17 +296,15 @@ button {
   background-color: var(--ink-deep);
   box-shadow:
     0 2px 0 rgba(255,255,255,.06) inset,
-    0 14px 22px -6px rgba(0,0,0,.55);
-  transform-origin: bottom center;
-  transform: perspective(700px) rotateX(11deg) rotate(var(--tilt, 0deg));
-  transition: transform .25s cubic-bezier(.3,0,.2,1), box-shadow .25s ease;
+    0 10px 18px -6px rgba(0,0,0,.5);
+  transition: transform .2s ease, box-shadow .2s ease;
   outline: none;
 }
 .book-cover-card:hover, .book-cover-card:focus-visible {
-  transform: perspective(700px) rotateX(0deg) rotate(0deg) translateY(-14px);
+  transform: translateY(-10px);
   box-shadow:
     0 2px 0 rgba(255,255,255,.08) inset,
-    0 28px 36px -8px rgba(0,0,0,.65);
+    0 22px 30px -8px rgba(0,0,0,.6);
   z-index: 2;
 }
 

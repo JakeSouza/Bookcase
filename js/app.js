@@ -5,7 +5,7 @@ import {
 import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { searchBooks, coverUrl } from "./openlibrary.js";
+import { searchBooks, coverUrl, fetchWorkById } from "./openlibrary.js";
 import { computeMatchScore } from "./taste-match.js";
 import { importGoodreadsCSV } from "./csv-import.js";
 
@@ -20,13 +20,6 @@ const PANEL_COUNT = 3;
 // ------------------------------------------------------------
 // Utilities
 // ------------------------------------------------------------
-// A small, deterministic per-book tilt so the shelf reads as a hand-arranged
-// display rather than a perfectly uniform grid.
-function hashTilt(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  return ((Math.abs(hash) % 9) - 4) * 0.5; // -2deg .. +2deg
-}
 
 function showToast(msg, ms = 3200) {
   const el = document.getElementById("toast");
@@ -135,7 +128,7 @@ function renderShelf(containerId, books, badgeType) {
       return `
         <div class="cover-wrap">
           <div class="book-cover-card" tabindex="0" role="button" data-id="${b.id}"
-               style="background-image:url('${coverUrl(b.coverId, "M")}'); --tilt:${hashTilt(b.title)}deg;">
+               style="background-image:url('${coverUrl(b.coverId, "M")}');">
             ${badge}
           </div>
           <div class="cover-caption">${escapeHtml(b.title)}</div>
@@ -218,10 +211,41 @@ function openBookCard(id) {
           <option value="read" ${book.status === "read" ? "selected" : ""}>Read</option>
         </select>
       </label>
+      <div style="margin-top:16px;">
+        <label style="display:block;font-size:.78rem;color:var(--paper-dim);margin-bottom:4px;">Reload from OpenLibrary ID</label>
+        <input id="bc-olid-input" placeholder="e.g. OL45804W"
+               value="${book.workKey ? book.workKey.replace("/works/", "") : ""}"
+               style="width:100%;margin-bottom:6px;padding:7px;background:var(--ink);color:var(--paper);border:1px solid var(--brass);border-radius:2px;">
+        <button class="stamp-button stamp-button-ghost" id="bc-refresh-olid">Reload cover, title, author & tags</button>
+        <p id="bc-refresh-status" style="font-size:.75rem;color:var(--paper-dim);margin-top:6px;min-height:1em;"></p>
+      </div>
       <button class="stamp-button stamp-button-ghost" id="bc-delete" style="margin-top:12px;">Remove from library</button>
     `;
     document.getElementById("bc-status-select").addEventListener("change", (e) => {
       updateDoc(doc(db, "books", book.id), { status: e.target.value });
+    });
+    document.getElementById("bc-refresh-olid").addEventListener("click", async () => {
+      const rawId = document.getElementById("bc-olid-input").value.trim();
+      const statusEl = document.getElementById("bc-refresh-status");
+      if (!rawId) {
+        statusEl.textContent = "Enter an OpenLibrary ID first.";
+        return;
+      }
+      statusEl.textContent = "Fetching…";
+      try {
+        const data = await fetchWorkById(rawId);
+        const updates = { workKey: data.workKey };
+        if (data.title) updates.title = data.title;
+        if (data.author) updates.author = data.author;
+        if (data.coverId) updates.coverId = data.coverId;
+        if (data.subjects.length) updates.tags = data.subjects.slice(0, 8);
+        await updateDoc(doc(db, "books", book.id), updates);
+        statusEl.textContent = "Updated.";
+        showToast(`Refreshed "${data.title || book.title}" from OpenLibrary.`);
+        openBookCard(book.id); // re-render the card with the new data
+      } catch (err) {
+        statusEl.textContent = "Couldn't find that OpenLibrary ID — double-check it and try again.";
+      }
     });
     document.getElementById("bc-delete").addEventListener("click", () => {
       if (confirm(`Remove "${book.title}" from your library?`)) {
