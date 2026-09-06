@@ -17,15 +17,15 @@ let isAdmin = false;
 let currentPanel = 0;
 const PANEL_COUNT = 3;
 
-const SPINE_PALETTE = ["#7C8C80", "#A23E48", "#B8925A", "#3E5C50", "#6B4A3A", "#8A6C86"];
-
 // ------------------------------------------------------------
 // Utilities
 // ------------------------------------------------------------
-function hashColor(str) {
+// A small, deterministic per-book tilt so the shelf reads as a hand-arranged
+// display rather than a perfectly uniform grid.
+function hashTilt(str) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  return SPINE_PALETTE[Math.abs(hash) % SPINE_PALETTE.length];
+  return ((Math.abs(hash) % 9) - 4) * 0.5; // -2deg .. +2deg
 }
 
 function showToast(msg, ms = 3200) {
@@ -133,15 +133,17 @@ function renderShelf(containerId, books, badgeType) {
             : ""
           : `<div class="spine-badge badge-match">${b._match?.toFixed(1) ?? "–"}</div>`;
       return `
-        <div class="book-spine" tabindex="0" role="button" data-id="${b.id}"
-             style="background: linear-gradient(160deg, ${hashColor(b.title)}, ${hashColor(b.title)}dd);">
-          ${badge}
-          <span class="spine-title">${escapeHtml(b.title)}</span>
+        <div class="cover-wrap">
+          <div class="book-cover-card" tabindex="0" role="button" data-id="${b.id}"
+               style="background-image:url('${coverUrl(b.coverId, "M")}'); --tilt:${hashTilt(b.title)}deg;">
+            ${badge}
+          </div>
+          <div class="cover-caption">${escapeHtml(b.title)}</div>
         </div>`;
     })
     .join("");
 
-  container.querySelectorAll(".book-spine").forEach((el) => {
+  container.querySelectorAll(".book-cover-card").forEach((el) => {
     el.addEventListener("click", () => openBookCard(el.dataset.id));
     el.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") openBookCard(el.dataset.id);

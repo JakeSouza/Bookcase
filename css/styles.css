@@ -251,22 +251,23 @@ button {
 }
 
 .shelf-scroll {
-  max-width: 1100px;
+  max-width: 1160px;
   margin: 30px auto 0;
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 44px 12px;
-  padding: 8px 6px 30px;
+  align-items: flex-start;
+  gap: 40px 22px;
+  padding: 16px 6px 34px;
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0,
-    transparent 190px,
-    var(--shelf-wood) 190px,
-    var(--shelf-wood) 197px,
-    transparent 197px,
-    transparent 200px
+    transparent 226px,
+    var(--shelf-wood) 226px,
+    var(--shelf-wood) 233px,
+    transparent 233px,
+    transparent 236px
   );
+  background-position: 0 194px;
 }
 
 .shelf-empty {
@@ -276,54 +277,58 @@ button {
   padding: 20px 0;
 }
 
-/* Book spine */
-.book-spine {
-  position: relative;
-  width: 54px;
-  height: 190px;
-  flex-shrink: 0;
-  border-radius: 1px 3px 3px 1px;
+/* Face-out book cover, tilted forward like a bookstore display shelf */
+.cover-wrap {
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding-bottom: 10px;
+  flex-direction: column;
+  align-items: center;
+  width: 128px;
+  flex-shrink: 0;
+}
+
+.book-cover-card {
+  position: relative;
+  width: 128px;
+  height: 192px;
+  border-radius: 3px;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--ink-deep);
   box-shadow:
-    inset -8px 0 14px rgba(0,0,0,.30),
-    inset 3px 0 0 rgba(255,255,255,.08),
-    2px 6px 10px rgba(0,0,0,.4);
+    0 2px 0 rgba(255,255,255,.06) inset,
+    0 14px 22px -6px rgba(0,0,0,.55);
   transform-origin: bottom center;
-  transition: transform .22s ease, box-shadow .22s ease;
+  transform: perspective(700px) rotateX(11deg) rotate(var(--tilt, 0deg));
+  transition: transform .25s cubic-bezier(.3,0,.2,1), box-shadow .25s ease;
   outline: none;
 }
-.book-spine:hover, .book-spine:focus-visible {
-  transform: translateY(-16px) rotate(-1.2deg);
+.book-cover-card:hover, .book-cover-card:focus-visible {
+  transform: perspective(700px) rotateX(0deg) rotate(0deg) translateY(-14px);
   box-shadow:
-    inset -8px 0 14px rgba(0,0,0,.30),
-    inset 3px 0 0 rgba(255,255,255,.1),
-    4px 16px 22px rgba(0,0,0,.5);
+    0 2px 0 rgba(255,255,255,.08) inset,
+    0 28px 36px -8px rgba(0,0,0,.65);
   z-index: 2;
 }
 
-.spine-title {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
+.cover-caption {
+  margin-top: 10px;
+  max-width: 122px;
   font-family: var(--serif);
-  font-weight: 500;
   font-size: .74rem;
-  line-height: 1.15;
-  max-height: 160px;
+  line-height: 1.25;
+  text-align: center;
+  color: var(--paper-dim);
+  white-space: nowrap;
   overflow: hidden;
-  color: rgba(237,230,214,.92);
-  text-shadow: 0 1px 2px rgba(0,0,0,.4);
+  text-overflow: ellipsis;
 }
 
 .spine-badge {
   position: absolute;
-  top: -11px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 28px;
-  height: 28px;
+  top: -10px;
+  right: -10px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: flex;
   align-items: center;
