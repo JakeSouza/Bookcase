@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>The Reading Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- Ambient library backdrop -->
+<div class="room-backdrop" aria-hidden="true"></div>
+
+<header class="room-header">
+  <span class="room-mark">The Reading Room</span>
+  <button id="admin-toggle" class="admin-toggle" title="Sign in to edit your shelves">Librarian sign-in</button>
+</header>
+
+<main id="track" class="track" aria-live="polite">
+
+  <!-- ===================== PANEL 1 — CURRENTLY READING ===================== -->
+  <section class="panel panel-reading" data-panel="0" aria-label="Currently reading">
+    <div class="lamp-glow" aria-hidden="true"></div>
+    <div id="reading-content" class="reading-stage">
+      <div class="reading-empty">
+        <p>Nothing on the nightstand right now.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PANEL 2 — READ SHELF ===================== -->
+  <section class="panel panel-shelf" data-panel="1" aria-label="Books you've read">
+    <div class="shelf-head">
+      <h2 class="shelf-title">The Shelf</h2>
+      <label class="catalog-select">
+        <span>Arrange by</span>
+        <select id="read-sort">
+          <option value="rating-desc">Highest rated</option>
+          <option value="series-desc">Highest rated series</option>
+          <option value="author-asc">Author, A–Z</option>
+          <option value="title-asc">Title, A–Z</option>
+        </select>
+      </label>
+    </div>
+    <div id="read-shelf" class="shelf-scroll"></div>
+  </section>
+
+  <!-- ===================== PANEL 3 — TO READ SHELF ===================== -->
+  <section class="panel panel-shelf" data-panel="2" aria-label="Books on your to-read list">
+    <div class="shelf-head">
+      <h2 class="shelf-title">The Waiting Stack</h2>
+      <label class="catalog-select">
+        <span>Arrange by</span>
+        <select id="tbr-sort">
+          <option value="match-desc">Best match to your taste</option>
+          <option value="series-desc">Highest rated series</option>
+          <option value="author-asc">Author, A–Z</option>
+          <option value="title-asc">Title, A–Z</option>
+        </select>
+      </label>
+    </div>
+    <div id="tbr-shelf" class="shelf-scroll"></div>
+  </section>
+
+</main>
+
+<!-- Swipe / page controls -->
+<nav class="room-nav" aria-label="Section navigation">
+  <button class="nav-arrow nav-arrow-left" id="nav-prev" aria-label="Previous section">‹</button>
+  <div class="nav-ribbon" id="nav-dots">
+    <button class="nav-dot is-active" data-goto="0" aria-label="Go to Currently Reading"></button>
+    <button class="nav-dot" data-goto="1" aria-label="Go to The Shelf"></button>
+    <button class="nav-dot" data-goto="2" aria-label="Go to The Waiting Stack"></button>
+  </div>
+  <button class="nav-arrow nav-arrow-right" id="nav-next" aria-label="Next section">›</button>
+</nav>
+
+<!-- Book detail card (shared, positioned near the clicked spine) -->
+<div id="book-card" class="book-card" hidden>
+  <button class="book-card-close" id="book-card-close" aria-label="Close">×</button>
+  <div class="book-card-inner">
+    <img id="bc-cover" class="bc-cover" alt="">
+    <div class="bc-info">
+      <p id="bc-series" class="bc-series"></p>
+      <h3 id="bc-title" class="bc-title"></h3>
+      <p id="bc-author" class="bc-author"></p>
+      <div id="bc-tags" class="bc-tags"></div>
+      <div id="bc-rating-wrap" class="bc-rating-wrap"></div>
+      <div id="bc-admin-actions" class="bc-admin-actions" hidden></div>
+    </div>
+  </div>
+</div>
+
+<!-- Sign-in panel (admin) -->
+<div id="signin-panel" class="signin-panel" hidden>
+  <div class="signin-inner">
+    <button class="book-card-close" id="signin-close" aria-label="Close">×</button>
+    <h3>Librarian sign-in</h3>
+    <p class="signin-copy">Sign in to add books, edit ratings, or import your GoodReads export.</p>
+    <input id="signin-email" type="email" placeholder="Email" autocomplete="username">
+    <input id="signin-password" type="password" placeholder="Password" autocomplete="current-password">
+    <button id="signin-submit" class="stamp-button">Sign in</button>
+    <p id="signin-error" class="signin-error"></p>
+  </div>
+</div>
+
+<!-- Admin drawer: appears once signed in -->
+<div id="admin-drawer" class="admin-drawer" hidden>
+  <button class="admin-drawer-tab" id="admin-drawer-tab">Librarian tools</button>
+  <div class="admin-drawer-panel">
+    <h4>Add a book</h4>
+    <input id="add-title" placeholder="Title">
+    <input id="add-author" placeholder="Author (optional — improves search)">
+    <button id="add-search" class="stamp-button stamp-button-ghost">Find on OpenLibrary</button>
+    <div id="add-results" class="add-results"></div>
+
+    <h4>Import GoodReads export</h4>
+    <input type="file" id="csv-file" accept=".csv">
+    <button id="csv-import-btn" class="stamp-button stamp-button-ghost">Import CSV</button>
+    <div id="csv-status" class="csv-status"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="js/firebase-config.js"></script>
+<script type="module" src="js/openlibrary.js"></script>
+<script type="module" src="js/taste-match.js"></script>
+<script type="module" src="js/csv-import.js"></script>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,580 @@
+/* ============================================================
+   THE READING ROOM — design tokens
+   ============================================================ */
+:root {
+  --ink: #1B2620;
+  --ink-deep: #131C17;
+  --paper: #EDE6D6;
+  --paper-dim: #C9C0AC;
+  --brass: #B8925A;
+  --brass-bright: #D8AD74;
+  --oxblood: #A23E48;
+  --amber: #E8B96C;
+  --sage: #7C8C80;
+  --shelf-wood: #3A2E22;
+
+  --serif: "Fraunces", Georgia, serif;
+  --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --radius-card: 3px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--sans);
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+::selection { background: var(--brass); color: var(--ink-deep); }
+
+button {
+  font-family: var(--sans);
+  cursor: pointer;
+}
+
+/* ============================================================
+   Ambient backdrop
+   ============================================================ */
+.room-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -10%, rgba(184,146,90,.10), transparent 60%),
+    linear-gradient(180deg, var(--ink) 0%, var(--ink-deep) 100%);
+}
+
+.room-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: .05;
+  background-image: repeating-linear-gradient(
+    90deg, rgba(255,255,255,.5) 0 1px, transparent 1px 3px
+  );
+  mix-blend-mode: overlay;
+}
+
+/* ============================================================
+   Header
+   ============================================================ */
+.room-header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 22px 32px;
+  pointer-events: none;
+}
+
+.room-mark {
+  font-family: var(--serif);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1.05rem;
+  color: var(--brass-bright);
+  letter-spacing: .01em;
+  pointer-events: auto;
+}
+
+.admin-toggle {
+  pointer-events: auto;
+  background: transparent;
+  border: 1px solid rgba(184,146,90,.4);
+  color: var(--paper-dim);
+  font-size: .8rem;
+  padding: 7px 14px;
+  border-radius: 2px;
+  transition: border-color .2s, color .2s;
+}
+.admin-toggle:hover, .admin-toggle:focus-visible { border-color: var(--brass-bright); color: var(--paper); }
+
+/* ============================================================
+   Track / panels
+   ============================================================ */
+.track {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: 300vw;
+  height: 100vh;
+  transform: translateX(0);
+  transition: transform .55s cubic-bezier(.65,0,.35,1);
+  touch-action: pan-y;
+}
+
+.panel {
+  width: 100vw;
+  height: 100vh;
+  flex-shrink: 0;
+  padding: 90px 40px 110px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--brass) transparent;
+}
+.panel::-webkit-scrollbar { width: 8px; }
+.panel::-webkit-scrollbar-thumb { background: var(--brass); border-radius: 4px; }
+
+/* ---------- Panel 1: Currently Reading ---------- */
+.panel-reading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.lamp-glow {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  width: 640px;
+  height: 640px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(232,185,108,.20) 0%, rgba(232,185,108,.06) 45%, transparent 72%);
+  pointer-events: none;
+}
+
+.reading-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 420px;
+}
+
+.reading-cover {
+  width: 220px;
+  height: 330px;
+  object-fit: cover;
+  border-radius: 2px;
+  box-shadow:
+    0 2px 0 rgba(255,255,255,.06) inset,
+    0 30px 60px -12px rgba(0,0,0,.7),
+    0 0 0 1px rgba(0,0,0,.4);
+  margin-bottom: 34px;
+}
+
+.reading-series {
+  font-size: .78rem;
+  letter-spacing: .04em;
+  color: var(--brass-bright);
+  margin: 0 0 8px;
+}
+
+.reading-title {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  line-height: 1.15;
+  margin: 0 0 10px;
+  color: var(--paper);
+}
+
+.reading-author {
+  font-size: 1rem;
+  color: var(--paper-dim);
+  margin: 0 0 30px;
+}
+
+.reading-progress-row {
+  width: 260px;
+}
+.reading-progress-track {
+  height: 3px;
+  background: rgba(237,230,214,.15);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+.reading-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--brass), var(--amber));
+}
+.reading-progress-label {
+  font-size: .75rem;
+  color: var(--sage);
+}
+
+.reading-empty p {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.3rem;
+  color: var(--paper-dim);
+}
+
+/* ---------- Panels 2 & 3: Shelves ---------- */
+.shelf-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  max-width: 1100px;
+  margin: 0 auto 10px;
+}
+
+.shelf-title {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.9rem;
+  margin: 0;
+}
+
+.catalog-select {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: .8rem;
+  color: var(--paper-dim);
+}
+.catalog-select select {
+  background: var(--ink-deep);
+  color: var(--paper);
+  border: 1px solid var(--brass);
+  border-radius: 2px;
+  padding: 7px 10px;
+  font-family: var(--sans);
+  font-size: .82rem;
+}
+
+.shelf-scroll {
+  max-width: 1100px;
+  margin: 30px auto 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 44px 12px;
+  padding: 8px 6px 30px;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 190px,
+    var(--shelf-wood) 190px,
+    var(--shelf-wood) 197px,
+    transparent 197px,
+    transparent 200px
+  );
+}
+
+.shelf-empty {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--paper-dim);
+  padding: 20px 0;
+}
+
+/* Book spine */
+.book-spine {
+  position: relative;
+  width: 54px;
+  height: 190px;
+  flex-shrink: 0;
+  border-radius: 1px 3px 3px 1px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 10px;
+  box-shadow:
+    inset -8px 0 14px rgba(0,0,0,.30),
+    inset 3px 0 0 rgba(255,255,255,.08),
+    2px 6px 10px rgba(0,0,0,.4);
+  transform-origin: bottom center;
+  transition: transform .22s ease, box-shadow .22s ease;
+  outline: none;
+}
+.book-spine:hover, .book-spine:focus-visible {
+  transform: translateY(-16px) rotate(-1.2deg);
+  box-shadow:
+    inset -8px 0 14px rgba(0,0,0,.30),
+    inset 3px 0 0 rgba(255,255,255,.1),
+    4px 16px 22px rgba(0,0,0,.5);
+  z-index: 2;
+}
+
+.spine-title {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: .74rem;
+  line-height: 1.15;
+  max-height: 160px;
+  overflow: hidden;
+  color: rgba(237,230,214,.92);
+  text-shadow: 0 1px 2px rgba(0,0,0,.4);
+}
+
+.spine-badge {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: .68rem;
+  font-weight: 600;
+  color: var(--ink-deep);
+  box-shadow: 0 3px 6px rgba(0,0,0,.4);
+}
+.spine-badge.badge-rating { background: linear-gradient(160deg, var(--brass-bright), var(--brass)); }
+.spine-badge.badge-match { background: linear-gradient(160deg, #E8B96C, var(--oxblood)); color: var(--paper); }
+
+/* ============================================================
+   Nav: arrows + dots
+   ============================================================ */
+.room-nav {
+  position: fixed;
+  bottom: 26px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.nav-arrow {
+  background: transparent;
+  border: none;
+  color: var(--paper-dim);
+  font-size: 1.6rem;
+  line-height: 1;
+  padding: 6px 10px;
+  transition: color .2s;
+}
+.nav-arrow:hover, .nav-arrow:focus-visible { color: var(--brass-bright); }
+
+.nav-ribbon { display: flex; gap: 10px; }
+.nav-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--brass);
+  background: transparent;
+  padding: 0;
+  transition: background .2s, transform .2s;
+}
+.nav-dot.is-active { background: var(--brass-bright); transform: scale(1.3); }
+
+/* ============================================================
+   Book detail card
+   ============================================================ */
+.book-card {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  z-index: 40;
+  width: min(560px, 92vw);
+  max-height: 82vh;
+  overflow-y: auto;
+  background: var(--ink-deep);
+  border: 1px solid var(--brass);
+  border-radius: 4px;
+  box-shadow: 0 40px 80px rgba(0,0,0,.6);
+  padding: 30px;
+}
+.book-card[hidden] { display: none; }
+
+.book-card-close {
+  position: absolute;
+  top: 12px; right: 14px;
+  background: transparent;
+  border: none;
+  color: var(--paper-dim);
+  font-size: 1.4rem;
+}
+.book-card-close:hover { color: var(--paper); }
+
+.book-card-inner {
+  display: flex;
+  gap: 24px;
+}
+.bc-cover {
+  width: 140px;
+  height: 210px;
+  object-fit: cover;
+  border-radius: 2px;
+  flex-shrink: 0;
+  box-shadow: 0 12px 24px rgba(0,0,0,.5);
+}
+.bc-info { flex: 1; min-width: 0; }
+.bc-series { color: var(--brass-bright); font-size: .78rem; margin: 0 0 6px; }
+.bc-title { font-family: var(--serif); font-size: 1.4rem; margin: 0 0 4px; }
+.bc-author { color: var(--paper-dim); margin: 0 0 14px; font-size: .92rem; }
+.bc-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.bc-tag {
+  font-size: .7rem;
+  border: 1px solid var(--sage);
+  color: var(--sage);
+  padding: 3px 9px;
+  border-radius: 12px;
+}
+
+.bc-rating-wrap { margin-top: 6px; }
+.bc-match-score {
+  font-family: var(--serif);
+  font-size: 2rem;
+  color: var(--amber);
+}
+.bc-match-label { font-size: .75rem; color: var(--paper-dim); }
+
+/* Quarter-star rating widget */
+.star-rating {
+  display: inline-flex;
+  gap: 3px;
+  cursor: pointer;
+}
+.star-rating .star {
+  position: relative;
+  width: 26px;
+  height: 24px;
+}
+.star-rating .star svg { width: 100%; height: 100%; }
+.star-rating .star .star-fill {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  width: var(--fill, 0%);
+}
+.star-outline path { fill: none; stroke: var(--brass); stroke-width: 1.4; }
+.star-fill-shape path { fill: var(--amber); }
+.rating-number { margin-left: 10px; font-size: .85rem; color: var(--paper-dim); vertical-align: middle; }
+
+/* ============================================================
+   Sign-in panel & admin drawer
+   ============================================================ */
+.signin-panel, .book-card { }
+.signin-panel {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  z-index: 50;
+  width: min(360px, 90vw);
+  height: fit-content;
+  background: var(--ink-deep);
+  border: 1px solid var(--brass);
+  border-radius: 4px;
+  padding: 28px;
+  box-shadow: 0 40px 80px rgba(0,0,0,.6);
+}
+.signin-panel[hidden] { display: none; }
+.signin-panel h3 { font-family: var(--serif); margin-top: 0; }
+.signin-copy { color: var(--paper-dim); font-size: .85rem; margin-bottom: 18px; }
+.signin-panel input {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 9px 10px;
+  background: var(--ink);
+  border: 1px solid rgba(184,146,90,.4);
+  color: var(--paper);
+  border-radius: 2px;
+  font-family: var(--sans);
+}
+.signin-error { color: var(--oxblood); font-size: .8rem; min-height: 1em; }
+
+.stamp-button {
+  background: var(--oxblood);
+  color: var(--paper);
+  border: none;
+  padding: 10px 18px;
+  border-radius: 2px;
+  font-size: .85rem;
+  font-weight: 500;
+  letter-spacing: .01em;
+  transition: filter .2s;
+}
+.stamp-button:hover { filter: brightness(1.12); }
+.stamp-button-ghost {
+  background: transparent;
+  border: 1px solid var(--brass);
+  color: var(--brass-bright);
+}
+
+.admin-drawer {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 30;
+  display: flex;
+}
+.admin-drawer[hidden] { display: none; }
+.admin-drawer-tab {
+  writing-mode: vertical-rl;
+  background: var(--brass);
+  color: var(--ink-deep);
+  border: none;
+  padding: 16px 8px;
+  font-size: .8rem;
+  font-weight: 600;
+  border-radius: 4px 0 0 4px;
+}
+.admin-drawer-panel {
+  width: 0;
+  overflow: hidden;
+  background: var(--ink-deep);
+  border-left: 1px solid var(--brass);
+  transition: width .25s ease;
+  padding: 0;
+}
+.admin-drawer.is-open .admin-drawer-panel {
+  width: 300px;
+  padding: 22px;
+  overflow-y: auto;
+  max-height: 90vh;
+}
+.admin-drawer h4 { font-family: var(--serif); margin: 18px 0 10px; }
+.admin-drawer h4:first-child { margin-top: 0; }
+.admin-drawer input[type="text"], .admin-drawer input:not([type]) {
+  width: 100%; margin-bottom: 8px; padding: 8px; background: var(--ink);
+  border: 1px solid rgba(184,146,90,.4); color: var(--paper); border-radius: 2px;
+}
+.admin-drawer input[type="file"] { color: var(--paper-dim); font-size: .78rem; margin-bottom: 8px; }
+.add-results, .csv-status { font-size: .8rem; color: var(--paper-dim); margin-top: 10px; }
+.add-result-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0; border-bottom: 1px solid rgba(184,146,90,.15);
+}
+.add-result-item button { font-size: .72rem; padding: 4px 8px; }
+
+.toast {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink-deep);
+  border: 1px solid var(--brass);
+  color: var(--paper);
+  padding: 10px 20px;
+  border-radius: 3px;
+  font-size: .85rem;
+  z-index: 60;
+}
+.toast[hidden] { display: none; }
+
+/* ============================================================
+   Responsive
+   ============================================================ */
+@media (max-width: 640px) {
+  .panel { padding: 80px 18px 100px; }
+  .book-card-inner { flex-direction: column; align-items: center; text-align: center; }
+  .bc-tags { justify-content: center; }
+  .admin-drawer.is-open .admin-drawer-panel { width: 78vw; }
+}
