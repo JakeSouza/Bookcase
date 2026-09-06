@@ -8,12 +8,12 @@ import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.0/firebas
 import { getAuth } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDnO2CwbmvO7MWKhNpq9Ov17lfGLumvop4",
+  authDomain: "bookcase-c01bf.firebaseapp.com",
+  projectId: "bookcase-c01bf",
+  storageBucket: "bookcase-c01bf.firebasestorage.app",
+  messagingSenderId: "413489194634",
+  appId: "1:413489194634:web:9ab91d430e1d844c4a2f73"
 };
 
 export const app = initializeApp(firebaseConfig);
