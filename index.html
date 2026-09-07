@@ -125,6 +125,10 @@
 
     <h4>Backfill Google Books data</h4>
     <p style="font-size:.78rem;color:var(--paper-dim);margin:0 0 8px;">Cross-references every book already in your library against Google Books to fill in missing descriptions and tags.</p>
+    <label style="display:flex;align-items:center;gap:8px;font-size:.78rem;color:var(--paper-dim);margin-bottom:10px;">
+      <input type="checkbox" id="backfill-force" style="width:auto;margin:0;">
+      Force recheck all books (ignore previous results)
+    </label>
     <button id="backfill-btn" class="stamp-button stamp-button-ghost">Enrich existing library</button>
     <div id="backfill-status" class="csv-status"></div>
   </div>

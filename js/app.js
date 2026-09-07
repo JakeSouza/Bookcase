@@ -551,7 +551,8 @@ document.getElementById("backfill-btn").addEventListener("click", async (e) => {
   const btn = e.currentTarget;
   btn.disabled = true;
 
-  const targets = allBooks.filter((b) => !b.googleEnriched);
+  const forceRecheck = document.getElementById("backfill-force").checked;
+  const targets = allBooks.filter((b) => forceRecheck || !b.googleEnriched);
   if (!targets.length) {
     statusEl.textContent = "Everything's already been cross-referenced.";
     btn.disabled = false;
@@ -562,9 +563,10 @@ document.getElementById("backfill-btn").addEventListener("click", async (e) => {
   let firstError = null;
   for (const [i, book] of targets.entries()) {
     statusEl.textContent = `(${i + 1}/${targets.length}) Checking "${book.title}"…`;
-    const updates = { googleEnriched: true };
+    const updates = {};
     try {
       const gbook = await searchGoogleBooks(book.title, book.author);
+      updates.googleEnriched = true; // only mark as checked when the request actually succeeded
       if (gbook) {
         if (gbook.categories?.length) updates.tags = mergeTags(book.tags || [], gbook.categories);
         if (!book.description && gbook.description) updates.description = gbook.description;
@@ -572,8 +574,9 @@ document.getElementById("backfill-btn").addEventListener("click", async (e) => {
       }
     } catch (err) {
       if (!firstError) firstError = err.message;
+      // leave googleEnriched unset so this book gets retried next run
     }
-    await updateDoc(doc(db, "books", book.id), updates);
+    if (Object.keys(updates).length) await updateDoc(doc(db, "books", book.id), updates);
     await new Promise((r) => setTimeout(r, 150)); // be polite to the free API
   }
 
