@@ -84,7 +84,8 @@ async function fetchFromWork(workKey) {
     title: data.title || null,
     author: await resolveAuthorName(data.authors),
     coverId: (data.covers && data.covers[0]) || null,
-    subjects: (data.subjects || []).slice(0, 12)
+    subjects: (data.subjects || []).slice(0, 12),
+    description: extractDescription(data.description)
   };
 }
 
@@ -96,6 +97,7 @@ async function fetchFromEdition(editionOlid) {
   const workRef = (edition.works && edition.works[0] && edition.works[0].key) || null;
   let subjects = [];
   let authorName = null;
+  let description = extractDescription(edition.description);
 
   // Editions rarely carry subjects themselves — pull those (and author, as
   // a fallback) from the parent work when one is linked.
@@ -106,6 +108,7 @@ async function fetchFromEdition(editionOlid) {
         const work = await workRes.json();
         subjects = (work.subjects || []).slice(0, 12);
         authorName = await resolveAuthorName(work.authors);
+        if (!description) description = extractDescription(work.description);
       }
     } catch {
       /* fall through to edition-level author below */
@@ -118,8 +121,14 @@ async function fetchFromEdition(editionOlid) {
     title: edition.title || null,
     author: authorName,
     coverId: (edition.covers && edition.covers[0]) || null,
-    subjects
+    subjects,
+    description
   };
+}
+
+function extractDescription(raw) {
+  if (!raw) return null;
+  return typeof raw === "string" ? raw : raw.value || null;
 }
 
 async function resolveAuthorName(authorsField) {

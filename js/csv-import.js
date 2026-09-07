@@ -67,15 +67,17 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
 
             let coverId = null;
             let subjects = [];
+            let description = null;
             let workKey = null;
             const match = await findBestMatch(title, author);
             if (match) {
               coverId = match.coverId;
               workKey = match.workKey;
               subjects = match.subjects || [];
-              if ((!subjects || subjects.length < 3) && match.workKey) {
+              if (match.workKey) {
                 const details = await getWorkDetails(match.workKey);
                 if (details?.subjects?.length) subjects = details.subjects.slice(0, 12);
+                if (details?.description) description = details.description;
               }
             }
 
@@ -87,6 +89,7 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
               status,
               rating: status === "read" && goodreadsRating > 0 ? goodreadsRating : null,
               tags: subjects.length ? subjects.slice(0, 8) : extractTags(row["Bookshelves"]),
+              description,
               coverId,
               workKey,
               source: "goodreads-import",

@@ -5,7 +5,7 @@ import {
 import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
-import { searchBooks, coverUrl, fetchWorkById } from "./openlibrary.js";
+import { searchBooks, coverUrl, fetchWorkById, getWorkDetails } from "./openlibrary.js";
 import { computeMatchScore } from "./taste-match.js";
 import { importGoodreadsCSV } from "./csv-import.js";
 
@@ -22,11 +22,18 @@ const PANEL_COUNT = 3;
 // ------------------------------------------------------------
 // Deterministic "spine stripe" color per book, echoing a publisher's
 // genre-coded imprint colors — same book always gets the same stripe.
-const STRIPE_COLORS = ["#1F5C56", "#E8A93B", "#6B6E73"];
+const STRIPE_COLORS = ["#2E8177", "#E8A93B", "#8A8D94"];
 function stripeColor(str) {
   let hash = 0;
   for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
   return STRIPE_COLORS[Math.abs(hash) % STRIPE_COLORS.length];
+}
+
+function truncate(str, max) {
+  if (!str) return "";
+  const clean = str.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  return clean.slice(0, max).replace(/\s+\S*$/, "") + "…";
 }
 
 function showToast(msg, ms = 3200) {
@@ -76,23 +83,46 @@ function renderCurrentlyReading() {
     return;
   }
 
-  const progress = book.progressPercent ?? null;
+  const progress = book.progressPercent ?? 0;
+  const blurb = book.description
+    ? `<p class="reading-blurb">${escapeHtml(truncate(book.description, 420))}</p>`
+    : isAdmin
+    ? `<p class="reading-blurb reading-blurb-empty">No description yet — open this book's card and use "Reload from OpenLibrary" to fetch one.</p>`
+    : "";
 
   container.innerHTML = `
     <p class="kicker">Currently reading</p>
-    <img class="reading-cover" src="${coverUrl(book.coverId, "L")}" alt="Cover of ${escapeHtml(book.title)}">
+    <img class="reading-cover" id="reading-cover-img" tabindex="0" role="button"
+         src="${coverUrl(book.coverId, "L")}" alt="Cover of ${escapeHtml(book.title)}">
     ${book.series ? `<p class="reading-series">${escapeHtml(book.series)}${book.seriesPosition ? " · Book " + book.seriesPosition : ""}</p>` : ""}
     <h1 class="reading-title">${escapeHtml(book.title)}</h1>
     <p class="reading-author">by ${escapeHtml(book.author)}</p>
-    ${
-      progress !== null
-        ? `<div class="reading-progress-row">
-             <div class="reading-progress-track"><div class="reading-progress-fill" style="width:${progress}%"></div></div>
-             <div class="reading-progress-label">${progress}% through</div>
-           </div>`
-        : ""
-    }
+    ${blurb}
+    <div class="reading-progress-row">
+      <div class="reading-progress-track"><div class="reading-progress-fill" style="width:${progress}%"></div></div>
+      <div class="reading-progress-label">${progress}% through</div>
+    </div>
+    ${isAdmin ? `<input type="range" id="progress-slider" class="progress-slider" min="0" max="100" value="${progress}">` : ""}
   `;
+
+  const coverImg = document.getElementById("reading-cover-img");
+  coverImg.addEventListener("click", () => openBookCard(book.id));
+  coverImg.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") openBookCard(book.id);
+  });
+
+  if (isAdmin) {
+    const slider = document.getElementById("progress-slider");
+    const label = container.querySelector(".reading-progress-label");
+    const fill = container.querySelector(".reading-progress-fill");
+    slider.addEventListener("input", () => {
+      label.textContent = `${slider.value}% through`;
+      fill.style.width = `${slider.value}%`;
+    });
+    slider.addEventListener("change", () => {
+      updateDoc(doc(db, "books", book.id), { progressPercent: parseInt(slider.value, 10) });
+    });
+  }
 }
 
 // ------------------------------------------------------------
@@ -185,6 +215,7 @@ function openBookCard(id) {
 
   document.getElementById("bc-cover").src = coverUrl(book.coverId, "L");
   document.getElementById("bc-cover").alt = `Cover of ${book.title}`;
+  document.getElementById("bc-spine").style.background = stripeColor(book.title);
   document.getElementById("bc-series").textContent = book.series
     ? `${book.series}${book.seriesPosition ? " · Book " + book.seriesPosition : ""}`
     : "";
@@ -249,6 +280,7 @@ function openBookCard(id) {
         if (data.author) updates.author = data.author;
         if (data.coverId) updates.coverId = data.coverId;
         if (data.subjects.length) updates.tags = data.subjects.slice(0, 8);
+        if (data.description) updates.description = data.description;
         await updateDoc(doc(db, "books", book.id), updates);
         statusEl.textContent = "Updated.";
         showToast(`Refreshed "${data.title || book.title}" from OpenLibrary.`);
@@ -440,6 +472,13 @@ document.getElementById("add-search").addEventListener("click", async () => {
       btn.addEventListener("click", async () => {
         const r = results[parseInt(btn.dataset.idx, 10)];
         const status = document.getElementById(`add-status-${btn.dataset.idx}`).value;
+        let tags = r.subjects || [];
+        let description = null;
+        if (r.workKey) {
+          const details = await getWorkDetails(r.workKey);
+          if (details?.subjects?.length) tags = details.subjects.slice(0, 8);
+          if (details?.description) description = details.description;
+        }
         await addDoc(collection(db, "books"), {
           title: r.title,
           author: r.author,
@@ -447,7 +486,8 @@ document.getElementById("add-search").addEventListener("click", async () => {
           seriesPosition: null,
           status,
           rating: null,
-          tags: r.subjects || [],
+          tags,
+          description,
           coverId: r.coverId,
           workKey: r.workKey,
           source: "manual",
