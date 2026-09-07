@@ -10,5 +10,5 @@
 // select your Firebase project → enable "Books API" → Credentials →
 // Create API key → restrict it to Books API → paste it below.
 // ============================================================
-
-export const GOOGLE_BOOKS_API_KEY = "AIzaSyDIvzqVssbBjFY2oKc43UGAnuIjKzQ3Efo";
+export const GOOGLE_BOOKS_API_KEY =
+	import.meta.env?.VITE_GOOGLE_BOOKS_API_KEY ?? "";
