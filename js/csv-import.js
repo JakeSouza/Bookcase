@@ -86,10 +86,14 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
             // Cross-reference Google Books — fills gaps and tends to have
             // more consistently-populated categories/descriptions than
             // OpenLibrary alone, without needing an account or API key.
-            const gbook = await searchGoogleBooks(title, author);
-            if (gbook) {
-              subjects = mergeTags(subjects, gbook.categories);
-              if (!description && gbook.description) description = gbook.description;
+            try {
+              const gbook = await searchGoogleBooks(title, author);
+              if (gbook) {
+                subjects = mergeTags(subjects, gbook.categories);
+                if (!description && gbook.description) description = gbook.description;
+              }
+            } catch {
+              /* non-fatal — this book just won't get the Google Books cross-reference */
             }
 
             await addDoc(collection(db, "books"), {

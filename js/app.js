@@ -492,10 +492,14 @@ document.getElementById("add-search").addEventListener("click", async () => {
           if (details?.subjects?.length) tags = details.subjects.slice(0, 8);
           if (details?.description) description = details.description;
         }
-        const gbook = await searchGoogleBooks(r.title, r.author);
-        if (gbook) {
-          tags = mergeTags(tags, gbook.categories);
-          if (!description && gbook.description) description = gbook.description;
+        try {
+          const gbook = await searchGoogleBooks(r.title, r.author);
+          if (gbook) {
+            tags = mergeTags(tags, gbook.categories);
+            if (!description && gbook.description) description = gbook.description;
+          }
+        } catch {
+          /* non-fatal — book still gets added with OpenLibrary data alone */
         }
         await addDoc(collection(db, "books"), {
           title: r.title,
@@ -555,20 +559,27 @@ document.getElementById("backfill-btn").addEventListener("click", async (e) => {
   }
 
   let enriched = 0;
+  let firstError = null;
   for (const [i, book] of targets.entries()) {
     statusEl.textContent = `(${i + 1}/${targets.length}) Checking "${book.title}"…`;
-    const gbook = await searchGoogleBooks(book.title, book.author);
     const updates = { googleEnriched: true };
-    if (gbook) {
-      if (gbook.categories?.length) updates.tags = mergeTags(book.tags || [], gbook.categories);
-      if (!book.description && gbook.description) updates.description = gbook.description;
-      enriched++;
+    try {
+      const gbook = await searchGoogleBooks(book.title, book.author);
+      if (gbook) {
+        if (gbook.categories?.length) updates.tags = mergeTags(book.tags || [], gbook.categories);
+        if (!book.description && gbook.description) updates.description = gbook.description;
+        enriched++;
+      }
+    } catch (err) {
+      if (!firstError) firstError = err.message;
     }
     await updateDoc(doc(db, "books", book.id), updates);
     await new Promise((r) => setTimeout(r, 150)); // be polite to the free API
   }
 
-  statusEl.textContent = `Done — found new data for ${enriched} of ${targets.length} books checked.`;
+  statusEl.textContent = firstError
+    ? `Done, but requests were failing — found data for ${enriched} of ${targets.length}. First error: ${firstError}`
+    : `Done — found new data for ${enriched} of ${targets.length} books checked.`;
   btn.disabled = false;
 });
 

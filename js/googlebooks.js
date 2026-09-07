@@ -11,30 +11,31 @@ const VOLUMES_URL = "https://www.googleapis.com/books/v1/volumes";
 
 /**
  * Best-effort single match, mirroring findBestMatch() in openlibrary.js.
- * Returns null on no match or any request failure — this is always a
- * supplementary source, never a required one.
+ * Returns null only for a genuine "no match found" case. Request failures
+ * (bad response, network/CORS errors) are thrown instead of swallowed, so
+ * callers can tell the difference between "nothing to enrich" and
+ * "something's actually broken."
  */
 export async function searchGoogleBooks(title, author = "") {
   const q = `intitle:${title}${author ? `+inauthor:${author}` : ""}`;
   const params = new URLSearchParams({ q, maxResults: "1" });
 
-  try {
-    const res = await fetch(`${VOLUMES_URL}?${params.toString()}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const item = data.items && data.items[0];
-    if (!item) return null;
-
-    const info = item.volumeInfo || {};
-    return {
-      description: info.description || null,
-      categories: parseCategories(info.categories),
-      averageRating: info.averageRating ?? null,
-      ratingsCount: info.ratingsCount ?? null
-    };
-  } catch {
-    return null;
+  const res = await fetch(`${VOLUMES_URL}?${params.toString()}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Google Books request failed (HTTP ${res.status}): ${body.slice(0, 200)}`);
   }
+  const data = await res.json();
+  const item = data.items && data.items[0];
+  if (!item) return null; // genuinely no match — not an error
+
+  const info = item.volumeInfo || {};
+  return {
+    description: info.description || null,
+    categories: parseCategories(info.categories),
+    averageRating: info.averageRating ?? null,
+    ratingsCount: info.ratingsCount ?? null
+  };
 }
 
 // Google's categories often arrive as a single "/"-delimited BISAC-style
