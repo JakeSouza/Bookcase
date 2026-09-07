@@ -30,7 +30,17 @@ service cloud.firestore {
 
 This makes your shelves visible to anyone who visits the page, but only your signed-in account can add, edit, or delete books.
 
-## 2. Import your GoodReads library
+## 2. Set up your Google Books API key
+
+The site cross-references [Google Books](https://developers.google.com/books/docs/v1/using) alongside OpenLibrary for descriptions and tags. Requests without a key share a global "anonymous" quota with every other app on the internet that skips one — it gets exhausted fast and returns errors that have nothing to do with your own usage. A free key gives you your own dedicated quota instead, and since Firebase *is* Google Cloud, it comes from the same project you already made — no new signup.
+
+1. Go to the [Google Cloud console](https://console.cloud.google.com/) and select your existing Firebase project from the project dropdown at the top of the page.
+2. Use the search bar to find **Books API**, click into it, and click **Enable**.
+3. Go to **APIs & Services → Credentials → Create Credentials → API key**. Google generates one immediately.
+4. Click **Restrict key** → under **API restrictions**, choose **Restrict key** and select **Books API** only. This is what makes it safe to embed in client-side code — the key can't be used for anything else even if someone finds it in your page source, the same principle as your public Firebase web config.
+5. Copy the key and paste it into `js/googlebooks.js`, replacing the `YOUR_GOOGLE_BOOKS_API_KEY` placeholder.
+
+## 3. Import your GoodReads library
 
 1. In GoodReads: **My Books → Import/Export (bottom of the tools list on the left) → Export Library**. Download the CSV it emails you or generates.
 2. Open your deployed site, click **Librarian sign-in** (top right), sign in with the account you made above.
@@ -40,7 +50,7 @@ The importer reads your `Exclusive Shelf` column to sort books into reading / re
 
 Your GoodReads star ratings (whole numbers, 1–5) import as-is. Since the site supports quarter-star precision going forward, feel free to go back and fine-tune any of them from the book's detail card.
 
-## 3. Deploy to GitHub Pages
+## 4. Deploy to GitHub Pages
 
 1. Push this folder to a GitHub repo.
 2. Repo → **Settings → Pages → Source: Deploy from a branch**, pick `main` and `/root`.
