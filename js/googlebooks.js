@@ -13,10 +13,12 @@
 //   4. Click "Restrict key" → API restrictions → limit it to Books API
 //      (safe to embed in client-side code once restricted this way —
 //      the same principle as your public Firebase web config)
-//   5. Paste the key below, replacing the placeholder.
+//   5. Paste the key into js/google-books-config.js, replacing the
+//      placeholder there (kept in a separate file on purpose, so future
+//      updates to this file never overwrite your key).
 // ============================================================
 
-const GOOGLE_BOOKS_API_KEY = "YOUR_GOOGLE_BOOKS_API_KEY";
+import { GOOGLE_BOOKS_API_KEY } from "./google-books-config.js";
 
 const VOLUMES_URL = "https://www.googleapis.com/books/v1/volumes";
 
