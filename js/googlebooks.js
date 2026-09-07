@@ -30,7 +30,7 @@ const VOLUMES_URL = "https://www.googleapis.com/books/v1/volumes";
 export async function searchGoogleBooks(title, author = "") {
   const q = `intitle:${title}${author ? `+inauthor:${author}` : ""}`;
   const params = new URLSearchParams({ q, maxResults: "1" });
-  if (GOOGLE_BOOKS_API_KEY) {
+  if (GOOGLE_BOOKS_API_KEY && GOOGLE_BOOKS_API_KEY !== "YOUR_GOOGLE_BOOKS_API_KEY") {
     params.set("key", GOOGLE_BOOKS_API_KEY);
   }
 
@@ -47,9 +47,25 @@ export async function searchGoogleBooks(title, author = "") {
   return {
     description: info.description || null,
     categories: parseCategories(info.categories),
+    coverUrl: extractCoverUrl(info.imageLinks),
     averageRating: info.averageRating ?? null,
     ratingsCount: info.ratingsCount ?? null
   };
+}
+
+// Google's imageLinks offers several sizes depending on the volume — take
+// the largest available, and force https (Google sometimes serves these
+// over http, which browsers block as mixed content on an https page).
+function extractCoverUrl(imageLinks) {
+  if (!imageLinks) return null;
+  const link =
+    imageLinks.extraLarge ||
+    imageLinks.large ||
+    imageLinks.medium ||
+    imageLinks.small ||
+    imageLinks.thumbnail ||
+    imageLinks.smallThumbnail;
+  return link ? link.replace(/^http:\/\//, "https://") : null;
 }
 
 // Google's categories often arrive as a single "/"-delimited BISAC-style

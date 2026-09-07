@@ -68,6 +68,7 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
             onProgress(`(${i + 1}/${rows.length}) Looking up "${title}"…`);
 
             let coverId = null;
+            let googleCoverUrl = null;
             let subjects = [];
             let description = null;
             let workKey = null;
@@ -91,6 +92,7 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
               if (gbook) {
                 subjects = mergeTags(subjects, gbook.categories);
                 if (!description && gbook.description) description = gbook.description;
+                if (!coverId && gbook.coverUrl) googleCoverUrl = gbook.coverUrl;
               }
             } catch {
               /* non-fatal — this book just won't get the Google Books cross-reference */
@@ -106,6 +108,7 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
               tags: subjects.length ? subjects.slice(0, 8) : extractTags(row["Bookshelves"]),
               description,
               coverId,
+              googleCoverUrl,
               workKey,
               source: "goodreads-import",
               createdAt: serverTimestamp()

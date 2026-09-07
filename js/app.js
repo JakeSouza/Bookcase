@@ -31,6 +31,15 @@ function stripeColor(str) {
   return STRIPE_COLORS[Math.abs(hash) % STRIPE_COLORS.length];
 }
 
+// A book's cover: OpenLibrary's cover if we have one, otherwise fall back
+// to a Google Books cover image gathered during import/backfill, otherwise
+// the generic placeholder.
+function resolveCoverUrl(book, size = "M") {
+  if (book.coverId) return coverUrl(book.coverId, size);
+  if (book.googleCoverUrl) return book.googleCoverUrl;
+  return coverUrl(null, size);
+}
+
 function truncate(str, max) {
   if (!str) return "";
   const clean = str.replace(/\s+/g, " ").trim();
@@ -100,7 +109,7 @@ function renderCurrentlyReading() {
   container.innerHTML = `
     <p class="kicker">Currently reading</p>
     <img class="reading-cover" id="reading-cover-img" tabindex="0" role="button"
-         src="${coverUrl(book.coverId, "L")}" alt="Cover of ${escapeHtml(book.title)}">
+         src="${resolveCoverUrl(book, "L")}" alt="Cover of ${escapeHtml(book.title)}">
     ${book.series ? `<p class="reading-series">${escapeHtml(book.series)}${book.seriesPosition ? " · Book " + book.seriesPosition : ""}</p>` : ""}
     <h1 class="reading-title">${escapeHtml(book.title)}</h1>
     <p class="reading-author">by ${escapeHtml(book.author)}</p>
@@ -180,7 +189,7 @@ function renderShelf(containerId, books, badgeType) {
       return `
         <div class="cover-wrap">
           <div class="book-cover-card" tabindex="0" role="button" data-id="${b.id}"
-               style="background-image:url('${coverUrl(b.coverId, "M")}'); border-left-color:${stripeColor(b.title)};">
+               style="background-image:url('${resolveCoverUrl(b, "M")}'); border-left-color:${stripeColor(b.title)};">
             ${badge}
           </div>
           <div class="cover-caption">${escapeHtml(b.title)}</div>
@@ -226,7 +235,7 @@ function openBookCard(id) {
   const book = allBooks.find((b) => b.id === id);
   if (!book) return;
 
-  document.getElementById("bc-cover").src = coverUrl(book.coverId, "L");
+  document.getElementById("bc-cover").src = resolveCoverUrl(book, "L");
   document.getElementById("bc-cover").alt = `Cover of ${book.title}`;
   document.getElementById("bc-spine").style.background = stripeColor(book.title);
   document.getElementById("bc-series").textContent = book.series
@@ -487,6 +496,7 @@ document.getElementById("add-search").addEventListener("click", async () => {
         const status = document.getElementById(`add-status-${btn.dataset.idx}`).value;
         let tags = r.subjects || [];
         let description = null;
+        let googleCoverUrl = null;
         if (r.workKey) {
           const details = await getWorkDetails(r.workKey);
           if (details?.subjects?.length) tags = details.subjects.slice(0, 8);
@@ -497,6 +507,7 @@ document.getElementById("add-search").addEventListener("click", async () => {
           if (gbook) {
             tags = mergeTags(tags, gbook.categories);
             if (!description && gbook.description) description = gbook.description;
+            if (!r.coverId && gbook.coverUrl) googleCoverUrl = gbook.coverUrl;
           }
         } catch {
           /* non-fatal — book still gets added with OpenLibrary data alone */
@@ -511,6 +522,7 @@ document.getElementById("add-search").addEventListener("click", async () => {
           tags,
           description,
           coverId: r.coverId,
+          googleCoverUrl,
           workKey: r.workKey,
           source: "manual",
           createdAt: serverTimestamp()
@@ -570,6 +582,7 @@ document.getElementById("backfill-btn").addEventListener("click", async (e) => {
       if (gbook) {
         if (gbook.categories?.length) updates.tags = mergeTags(book.tags || [], gbook.categories);
         if (!book.description && gbook.description) updates.description = gbook.description;
+        if (!book.coverId && !book.googleCoverUrl && gbook.coverUrl) updates.googleCoverUrl = gbook.coverUrl;
         enriched++;
       }
     } catch (err) {
