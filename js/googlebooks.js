@@ -30,7 +30,7 @@ const VOLUMES_URL = "https://www.googleapis.com/books/v1/volumes";
 export async function searchGoogleBooks(title, author = "") {
   const q = `intitle:${title}${author ? `+inauthor:${author}` : ""}`;
   const params = new URLSearchParams({ q, maxResults: "1" });
-  if (GOOGLE_BOOKS_API_KEY && GOOGLE_BOOKS_API_KEY !== "AIzaSyDIvzqVssbBjFY2oKc43UGAnuIjKzQ3Efo") {
+  if (GOOGLE_BOOKS_API_KEY) {
     params.set("key", GOOGLE_BOOKS_API_KEY);
   }
 
