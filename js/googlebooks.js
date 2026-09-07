@@ -16,7 +16,7 @@
 //   5. Paste the key below, replacing the placeholder.
 // ============================================================
 
-const GOOGLE_BOOKS_API_KEY = "AIzaSyDIvzqVssbBjFY2oKc43UGAnuIjKzQ3Efo";
+const GOOGLE_BOOKS_API_KEY = "YOUR_GOOGLE_BOOKS_API_KEY";
 
 const VOLUMES_URL = "https://www.googleapis.com/books/v1/volumes";
 
@@ -66,6 +66,46 @@ function extractCoverUrl(imageLinks) {
     imageLinks.thumbnail ||
     imageLinks.smallThumbnail;
   return link ? link.replace(/^http:\/\//, "https://") : null;
+}
+
+/**
+ * Fetches one specific Google Books volume by ID — for pinning to an
+ * exact edition when a title/author search matches the wrong book.
+ * Accepts a bare volume ID (e.g. "zyTCAlFPjgYC") or a books.google.com URL
+ * containing one.
+ */
+export async function fetchGoogleBookById(rawId) {
+  const volumeId = normalizeVolumeId(rawId);
+  const params = new URLSearchParams();
+  if (GOOGLE_BOOKS_API_KEY && GOOGLE_BOOKS_API_KEY !== "YOUR_GOOGLE_BOOKS_API_KEY") {
+    params.set("key", GOOGLE_BOOKS_API_KEY);
+  }
+  const qs = params.toString();
+
+  const res = await fetch(`${VOLUMES_URL}/${encodeURIComponent(volumeId)}${qs ? `?${qs}` : ""}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Google Books request failed (HTTP ${res.status}): ${body.slice(0, 200)}`);
+  }
+  const item = await res.json();
+  const info = item.volumeInfo || {};
+  return {
+    title: info.title || null,
+    author: (info.authors && info.authors[0]) || null,
+    description: info.description || null,
+    categories: parseCategories(info.categories),
+    coverUrl: extractCoverUrl(info.imageLinks),
+    averageRating: info.averageRating ?? null,
+    ratingsCount: info.ratingsCount ?? null
+  };
+}
+
+function normalizeVolumeId(raw) {
+  const trimmed = raw.trim();
+  const urlMatch =
+    trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/) ||
+    trimmed.match(/\/books\/edition\/[^/]+\/([a-zA-Z0-9_-]+)/);
+  return urlMatch ? urlMatch[1] : trimmed;
 }
 
 // Google's categories often arrive as a single "/"-delimited BISAC-style

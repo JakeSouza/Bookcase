@@ -6,7 +6,7 @@ import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { searchBooks, coverUrl, fetchWorkById, getWorkDetails } from "./openlibrary.js";
-import { searchGoogleBooks } from "./googlebooks.js";
+import { searchGoogleBooks, fetchGoogleBookById } from "./googlebooks.js";
 import { mergeTags } from "./tag-utils.js";
 import { computeMatchScore } from "./taste-match.js";
 import { importGoodreadsCSV } from "./csv-import.js";
@@ -282,6 +282,13 @@ function openBookCard(id) {
         <button class="stamp-button stamp-button-ghost" id="bc-refresh-olid">Reload cover, title, author & tags</button>
         <p id="bc-refresh-status" style="font-size:.75rem;color:var(--paper-dim);margin-top:6px;min-height:1em;"></p>
       </div>
+      <div style="margin-top:16px;">
+        <label style="display:block;font-size:.78rem;color:var(--paper-dim);margin-bottom:4px;">Reload from Google Books (ID or URL — leave blank to search by title/author)</label>
+        <input id="bc-gbooks-input" placeholder="e.g. zyTCAlFPjgYC, or paste a books.google.com link"
+               style="width:100%;margin-bottom:6px;padding:7px;background:var(--ink);color:var(--paper);border:1px solid var(--brass);border-radius:2px;">
+        <button class="stamp-button stamp-button-ghost" id="bc-refresh-gbooks">Reload tags & description</button>
+        <p id="bc-gbooks-status" style="font-size:.75rem;color:var(--paper-dim);margin-top:6px;min-height:1em;"></p>
+      </div>
       <button class="stamp-button stamp-button-ghost" id="bc-delete" style="margin-top:12px;">Remove from library</button>
     `;
     document.getElementById("bc-status-select").addEventListener("change", (e) => {
@@ -309,6 +316,40 @@ function openBookCard(id) {
         openBookCard(book.id); // re-render the card with the new data
       } catch (err) {
         statusEl.textContent = "Couldn't find that OpenLibrary ID — double-check it and try again.";
+      }
+    });
+    document.getElementById("bc-refresh-gbooks").addEventListener("click", async () => {
+      const rawId = document.getElementById("bc-gbooks-input").value.trim();
+      const statusEl = document.getElementById("bc-gbooks-status");
+      statusEl.textContent = "Fetching…";
+      try {
+        const gbook = rawId
+          ? await fetchGoogleBookById(rawId)
+          : await searchGoogleBooks(book.title, book.author);
+
+        if (!gbook) {
+          statusEl.textContent = "No match found on Google Books for this title/author.";
+          return;
+        }
+
+        // An explicit reload overwrites the description (unlike the passive
+        // backfill, which only fills gaps) — this is a deliberate user action.
+        const updates = {};
+        if (gbook.categories?.length) updates.tags = mergeTags(book.tags || [], gbook.categories);
+        if (gbook.description) updates.description = gbook.description;
+        if (gbook.coverUrl && !book.coverId) updates.googleCoverUrl = gbook.coverUrl;
+
+        if (!Object.keys(updates).length) {
+          statusEl.textContent = "Found a match, but it had nothing new to add.";
+          return;
+        }
+
+        await updateDoc(doc(db, "books", book.id), updates);
+        statusEl.textContent = "Updated.";
+        showToast(`Refreshed "${book.title}" from Google Books.`);
+        openBookCard(book.id);
+      } catch (err) {
+        statusEl.textContent = "Couldn't fetch that — check the ID/URL and try again.";
       }
     });
     document.getElementById("bc-delete").addEventListener("click", () => {
