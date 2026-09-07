@@ -180,14 +180,21 @@ button { font-family: var(--sans); cursor: pointer; }
 .reading-progress-label { font-size: .75rem; color: var(--paper-dim); font-weight: 500; }
 
 .reading-progress-slider {
+  --progress: 0%;
   -webkit-appearance: none;
   appearance: none;
+  background: transparent;
   width: 100%;
-  height: 6px;
-  border-radius: 0;
-  margin-bottom: 10px;
+  height: 14px;
+  margin: 0 0 10px;
   cursor: pointer;
   outline: none;
+}
+.reading-progress-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border: none;
+  box-shadow: none;
+  background: linear-gradient(to right, var(--marigold) 0%, var(--marigold) var(--progress), var(--line) var(--progress), var(--line) 100%);
 }
 .reading-progress-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
@@ -195,11 +202,15 @@ button { font-family: var(--sans); cursor: pointer; }
   border-radius: 50%;
   background: var(--marigold);
   box-shadow: 0 0 0 3px var(--bg);
-  margin-top: 0;
+  margin-top: -4px;
   cursor: grab;
 }
 .reading-progress-slider::-webkit-slider-thumb:active { cursor: grabbing; }
-.reading-progress-slider::-moz-range-track { height: 6px; background: transparent; border: none; }
+.reading-progress-slider::-moz-range-track {
+  height: 6px;
+  border: none;
+  background: linear-gradient(to right, var(--marigold) 0%, var(--marigold) var(--progress), var(--line) var(--progress), var(--line) 100%);
+}
 .reading-progress-slider::-moz-range-thumb {
   width: 14px; height: 14px;
   border-radius: 50%;

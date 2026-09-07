@@ -94,7 +94,7 @@ function renderCurrentlyReading() {
 
   const progressControl = isAdmin
     ? `<input type="range" id="progress-slider" class="reading-progress-slider" min="0" max="100" value="${progress}"
-         style="background:${sliderGradient(progress)}">`
+         style="--progress:${progress}%">`
     : `<div class="reading-progress-track"><div class="reading-progress-fill" style="width:${progress}%"></div></div>`;
 
   container.innerHTML = `
@@ -123,7 +123,7 @@ function renderCurrentlyReading() {
     const label = container.querySelector(".reading-progress-label");
     slider.addEventListener("input", () => {
       label.textContent = `${slider.value}% through`;
-      slider.style.background = sliderGradient(slider.value);
+      slider.style.setProperty("--progress", `${slider.value}%`);
     });
     slider.addEventListener("change", () => {
       updateDoc(doc(db, "books", book.id), { progressPercent: parseInt(slider.value, 10) });
@@ -137,9 +137,6 @@ function renderCurrentlyReading() {
   }
 }
 
-function sliderGradient(percent) {
-  return `linear-gradient(to right, var(--marigold) 0%, var(--marigold) ${percent}%, var(--line) ${percent}%, var(--line) 100%)`;
-}
 
 // ------------------------------------------------------------
 // Panels 2 & 3 — Shelves
@@ -540,6 +537,39 @@ document.getElementById("csv-import-btn").addEventListener("click", async () => 
   } catch (err) {
     statusEl.textContent = "Import failed: " + err.message;
   }
+});
+
+// ------------------------------------------------------------
+// Admin: backfill Google Books data onto books already in the library
+// ------------------------------------------------------------
+document.getElementById("backfill-btn").addEventListener("click", async (e) => {
+  const statusEl = document.getElementById("backfill-status");
+  const btn = e.currentTarget;
+  btn.disabled = true;
+
+  const targets = allBooks.filter((b) => !b.googleEnriched);
+  if (!targets.length) {
+    statusEl.textContent = "Everything's already been cross-referenced.";
+    btn.disabled = false;
+    return;
+  }
+
+  let enriched = 0;
+  for (const [i, book] of targets.entries()) {
+    statusEl.textContent = `(${i + 1}/${targets.length}) Checking "${book.title}"…`;
+    const gbook = await searchGoogleBooks(book.title, book.author);
+    const updates = { googleEnriched: true };
+    if (gbook) {
+      if (gbook.categories?.length) updates.tags = mergeTags(book.tags || [], gbook.categories);
+      if (!book.description && gbook.description) updates.description = gbook.description;
+      enriched++;
+    }
+    await updateDoc(doc(db, "books", book.id), updates);
+    await new Promise((r) => setTimeout(r, 150)); // be polite to the free API
+  }
+
+  statusEl.textContent = `Done — found new data for ${enriched} of ${targets.length} books checked.`;
+  btn.disabled = false;
 });
 
 // ------------------------------------------------------------
