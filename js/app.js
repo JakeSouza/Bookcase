@@ -20,6 +20,14 @@ const PANEL_COUNT = 3;
 // ------------------------------------------------------------
 // Utilities
 // ------------------------------------------------------------
+// Deterministic "spine stripe" color per book, echoing a publisher's
+// genre-coded imprint colors — same book always gets the same stripe.
+const STRIPE_COLORS = ["#1F5C56", "#E8A93B", "#6B6E73"];
+function stripeColor(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  return STRIPE_COLORS[Math.abs(hash) % STRIPE_COLORS.length];
+}
 
 function showToast(msg, ms = 3200) {
   const el = document.getElementById("toast");
@@ -71,6 +79,7 @@ function renderCurrentlyReading() {
   const progress = book.progressPercent ?? null;
 
   container.innerHTML = `
+    <p class="kicker">Currently reading</p>
     <img class="reading-cover" src="${coverUrl(book.coverId, "L")}" alt="Cover of ${escapeHtml(book.title)}">
     ${book.series ? `<p class="reading-series">${escapeHtml(book.series)}${book.seriesPosition ? " · Book " + book.seriesPosition : ""}</p>` : ""}
     <h1 class="reading-title">${escapeHtml(book.title)}</h1>
@@ -128,10 +137,11 @@ function renderShelf(containerId, books, badgeType) {
       return `
         <div class="cover-wrap">
           <div class="book-cover-card" tabindex="0" role="button" data-id="${b.id}"
-               style="background-image:url('${coverUrl(b.coverId, "M")}');">
+               style="background-image:url('${coverUrl(b.coverId, "M")}'); border-left-color:${stripeColor(b.title)};">
             ${badge}
           </div>
           <div class="cover-caption">${escapeHtml(b.title)}</div>
+          <div class="cover-author">${escapeHtml(b.author)}</div>
         </div>`;
     })
     .join("");
@@ -212,8 +222,8 @@ function openBookCard(id) {
         </select>
       </label>
       <div style="margin-top:16px;">
-        <label style="display:block;font-size:.78rem;color:var(--paper-dim);margin-bottom:4px;">Reload from OpenLibrary ID</label>
-        <input id="bc-olid-input" placeholder="e.g. OL45804W"
+        <label style="display:block;font-size:.78rem;color:var(--paper-dim);margin-bottom:4px;">Reload from OpenLibrary (work or edition ID)</label>
+        <input id="bc-olid-input" placeholder="Work ID e.g. OL45804W, or edition ID e.g. OL7353617M"
                value="${book.workKey ? book.workKey.replace("/works/", "") : ""}"
                style="width:100%;margin-bottom:6px;padding:7px;background:var(--ink);color:var(--paper);border:1px solid var(--brass);border-radius:2px;">
         <button class="stamp-button stamp-button-ghost" id="bc-refresh-olid">Reload cover, title, author & tags</button>
