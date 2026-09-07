@@ -6,6 +6,8 @@ import Papa from "https://esm.sh/papaparse@5.4.1";
 import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { db } from "./firebase-config.js";
 import { findBestMatch, getWorkDetails } from "./openlibrary.js";
+import { searchGoogleBooks } from "./googlebooks.js";
+import { mergeTags } from "./tag-utils.js";
 
 const SHELF_STATUS_MAP = {
   read: "read",
@@ -79,6 +81,15 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
                 if (details?.subjects?.length) subjects = details.subjects.slice(0, 12);
                 if (details?.description) description = details.description;
               }
+            }
+
+            // Cross-reference Google Books — fills gaps and tends to have
+            // more consistently-populated categories/descriptions than
+            // OpenLibrary alone, without needing an account or API key.
+            const gbook = await searchGoogleBooks(title, author);
+            if (gbook) {
+              subjects = mergeTags(subjects, gbook.categories);
+              if (!description && gbook.description) description = gbook.description;
             }
 
             await addDoc(collection(db, "books"), {

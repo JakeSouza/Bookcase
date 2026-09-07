@@ -6,6 +6,8 @@ import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import { searchBooks, coverUrl, fetchWorkById, getWorkDetails } from "./openlibrary.js";
+import { searchGoogleBooks } from "./googlebooks.js";
+import { mergeTags } from "./tag-utils.js";
 import { computeMatchScore } from "./taste-match.js";
 import { importGoodreadsCSV } from "./csv-import.js";
 
@@ -90,6 +92,11 @@ function renderCurrentlyReading() {
     ? `<p class="reading-blurb reading-blurb-empty">No description yet — open this book's card and use "Reload from OpenLibrary" to fetch one.</p>`
     : "";
 
+  const progressControl = isAdmin
+    ? `<input type="range" id="progress-slider" class="reading-progress-slider" min="0" max="100" value="${progress}"
+         style="background:${sliderGradient(progress)}">`
+    : `<div class="reading-progress-track"><div class="reading-progress-fill" style="width:${progress}%"></div></div>`;
+
   container.innerHTML = `
     <p class="kicker">Currently reading</p>
     <img class="reading-cover" id="reading-cover-img" tabindex="0" role="button"
@@ -99,10 +106,10 @@ function renderCurrentlyReading() {
     <p class="reading-author">by ${escapeHtml(book.author)}</p>
     ${blurb}
     <div class="reading-progress-row">
-      <div class="reading-progress-track"><div class="reading-progress-fill" style="width:${progress}%"></div></div>
+      ${progressControl}
       <div class="reading-progress-label">${progress}% through</div>
     </div>
-    ${isAdmin ? `<input type="range" id="progress-slider" class="progress-slider" min="0" max="100" value="${progress}">` : ""}
+    ${isAdmin ? `<button class="stamp-button-ghost" id="mark-finished-btn" style="margin-top:20px;">Mark as finished</button>` : ""}
   `;
 
   const coverImg = document.getElementById("reading-cover-img");
@@ -114,15 +121,24 @@ function renderCurrentlyReading() {
   if (isAdmin) {
     const slider = document.getElementById("progress-slider");
     const label = container.querySelector(".reading-progress-label");
-    const fill = container.querySelector(".reading-progress-fill");
     slider.addEventListener("input", () => {
       label.textContent = `${slider.value}% through`;
-      fill.style.width = `${slider.value}%`;
+      slider.style.background = sliderGradient(slider.value);
     });
     slider.addEventListener("change", () => {
       updateDoc(doc(db, "books", book.id), { progressPercent: parseInt(slider.value, 10) });
     });
+
+    document.getElementById("mark-finished-btn").addEventListener("click", async () => {
+      await updateDoc(doc(db, "books", book.id), { status: "read", progressPercent: 100 });
+      showToast(`Marked "${book.title}" as finished — add a rating whenever you're ready.`);
+      openBookCard(book.id);
+    });
   }
+}
+
+function sliderGradient(percent) {
+  return `linear-gradient(to right, var(--marigold) 0%, var(--marigold) ${percent}%, var(--line) ${percent}%, var(--line) 100%)`;
 }
 
 // ------------------------------------------------------------
@@ -478,6 +494,11 @@ document.getElementById("add-search").addEventListener("click", async () => {
           const details = await getWorkDetails(r.workKey);
           if (details?.subjects?.length) tags = details.subjects.slice(0, 8);
           if (details?.description) description = details.description;
+        }
+        const gbook = await searchGoogleBooks(r.title, r.author);
+        if (gbook) {
+          tags = mergeTags(tags, gbook.categories);
+          if (!description && gbook.description) description = gbook.description;
         }
         await addDoc(collection(db, "books"), {
           title: r.title,

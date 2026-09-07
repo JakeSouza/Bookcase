@@ -24,24 +24,51 @@ function tagOverlapScore(candidateTags, readBooks) {
   const withTags = readBooks.filter((b) => b.tags && b.tags.length);
   if (!withTags.length || !candidateTags || !candidateTags.length) return null;
 
+  const freqData = computeTagDocFrequency(withTags);
   const candidateSet = new Set(candidateTags.map((t) => t.toLowerCase()));
+
   let weightedSum = 0;
   let weightTotal = 0;
 
   for (const book of withTags) {
     const bookTags = new Set(book.tags.map((t) => t.toLowerCase()));
-    const intersection = [...candidateSet].filter((t) => bookTags.has(t)).length;
-    const union = new Set([...candidateSet, ...bookTags]).size;
-    if (union === 0) continue;
-    const jaccard = intersection / union;
+    const sharedTags = [...candidateSet].filter((t) => bookTags.has(t));
+    const unionTags = new Set([...candidateSet, ...bookTags]);
+    if (unionTags.size === 0) continue;
+
+    // Weight shared tags by rarity across your read shelf — a match on
+    // something specific like "cli-fi" should count for more than a
+    // match on a generic tag like "Fiction" that's on almost everything.
+    const sharedWeight = sharedTags.reduce((sum, t) => sum + idfWeight(t, freqData), 0);
+    const unionWeight = [...unionTags].reduce((sum, t) => sum + idfWeight(t, freqData), 0);
+    const weightedJaccard = unionWeight > 0 ? sharedWeight / unionWeight : 0;
+
     const weight = Math.max(book.rating || 0, 0.5); // even a 0-rated read still counts a little
-    weightedSum += jaccard * weight;
+    weightedSum += weightedJaccard * weight;
     weightTotal += weight;
   }
 
   if (weightTotal === 0) return null;
   // Normalize: weightedSum/weightTotal is a 0..1-ish similarity; scale to 0..10
   return Math.min((weightedSum / weightTotal) * 5, 1) * 10;
+}
+
+// How many of your read books carry each tag, lower-cased. Used to
+// downweight tags that appear on nearly everything you've read (they
+// carry little information about *this* book specifically) and upweight
+// tags that appear on only a few of your favorites (a stronger signal).
+function computeTagDocFrequency(readBooks) {
+  const freq = {};
+  for (const book of readBooks) {
+    const seen = new Set(book.tags.map((t) => t.toLowerCase()));
+    seen.forEach((t) => { freq[t] = (freq[t] || 0) + 1; });
+  }
+  return { freq, totalDocs: readBooks.length || 1 };
+}
+
+function idfWeight(tag, freqData) {
+  const df = freqData.freq[tag] || 0;
+  return Math.log((freqData.totalDocs + 1) / (df + 1)) + 1;
 }
 
 /**
