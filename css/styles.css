@@ -29,6 +29,7 @@ html, body {
   color: var(--paper);
   font-family: var(--sans);
   overflow: hidden;
+  perspective: 2200px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -108,8 +109,15 @@ button { font-family: var(--sans); cursor: pointer; }
   width: 300vw;
   height: 100vh;
   transform: translateX(0);
-  transition: transform .55s cubic-bezier(.65,0,.35,1);
   touch-action: pan-y;
+}
+.track.is-turning {
+  animation: pageTurn .55s cubic-bezier(.65,0,.35,1) forwards;
+}
+@keyframes pageTurn {
+  0%   { transform: translateX(var(--from-x, 0)) rotateY(0deg); }
+  45%  { transform: translateX(calc((var(--from-x, 0) + var(--to-x, 0)) / 2)) rotateY(-5deg); }
+  100% { transform: translateX(var(--to-x, 0)) rotateY(0deg); }
 }
 
 .panel {
@@ -139,17 +147,21 @@ button { font-family: var(--sans); cursor: pointer; }
 
 .kicker { color: var(--cloth-bright); font-weight: 600; font-size: .82rem; margin: 0 0 18px; }
 
+.reading-cover-wrap {
+  display: inline-block;
+  margin: 0 0 40px 0;
+  transition: transform .1s ease-out;
+}
+
 .reading-cover {
+  display: block;
   width: 210px;
   height: 315px;
   object-fit: cover;
   border-radius: 0;
   box-shadow: 16px 16px 0 var(--cloth);
-  margin: 0 0 40px 0;
   cursor: pointer;
-  transition: transform .18s ease;
 }
-.reading-cover:hover, .reading-cover:focus-visible { transform: translate(-4px, -4px); }
 
 .reading-series { font-size: .8rem; color: var(--cloth-bright); font-weight: 600; margin: 0 0 8px; }
 
@@ -285,7 +297,7 @@ button { font-family: var(--sans); cursor: pointer; }
   background-position: center;
   background-color: var(--ink);
   box-shadow: 0 10px 20px -6px rgba(0,0,0,.55);
-  transition: transform .2s ease, box-shadow .2s ease;
+  transition: transform .1s ease-out, box-shadow .2s ease;
   outline: none;
 }
 .book-cover-card:hover, .book-cover-card:focus-visible {
@@ -326,6 +338,20 @@ button { font-family: var(--sans); cursor: pointer; }
 .spine-badge.badge-rating { background: var(--marigold); color: var(--bg); }
 .spine-badge.badge-match { background: var(--cloth); color: var(--paper); }
 
+/* Cursor-tilt parallax + light-sheen sweep, shared by book covers */
+.tilt-target { position: relative; overflow: hidden; }
+.tilt-target::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), rgba(255,255,255,.4), transparent 55%);
+  opacity: 0;
+  transition: opacity .25s ease;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+.tilt-target.is-hovering::after { opacity: 1; }
+
 /* ============================================================
    Nav: arrows + dots
    ============================================================ */
@@ -338,9 +364,22 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 .nav-arrow { background: transparent; border: none; color: var(--paper); font-size: 1.6rem; line-height: 1; padding: 6px 10px; transition: color .2s; }
 .nav-arrow:hover, .nav-arrow:focus-visible { color: var(--marigold); }
-.nav-ribbon { display: flex; gap: 10px; }
+.nav-ribbon { position: relative; display: flex; gap: 10px; padding-top: 20px; }
 .nav-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--paper-dim); background: transparent; padding: 0; transition: background .2s, transform .2s; }
 .nav-dot.is-active { background: var(--marigold); border-color: var(--marigold); transform: scale(1.3); }
+
+.ribbon-marker {
+  position: absolute;
+  top: -2px;
+  left: 0;
+  width: 12px;
+  height: 22px;
+  background: linear-gradient(180deg, var(--marigold), #C98A2E);
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 50% 100%, 0 72%);
+  box-shadow: 0 3px 6px rgba(0,0,0,.45);
+  transition: transform .4s cubic-bezier(.65,0,.35,1);
+  pointer-events: none;
+}
 
 /* ============================================================
    Book detail card

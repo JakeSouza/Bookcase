@@ -40,6 +40,27 @@ function resolveCoverUrl(book, size = "M") {
   return coverUrl(null, size);
 }
 
+// Cursor-tilt parallax + light-sheen sweep. Applies a 3D tilt toward the
+// cursor and a moving highlight, like light catching a glossy dust jacket.
+function attachTiltEffect(el, { maxTilt = 8, lift = 6, scaleAmount = 1.02 } = {}) {
+  el.classList.add("tilt-target");
+  el.addEventListener("mousemove", (e) => {
+    const rect = el.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width;
+    const py = (e.clientY - rect.top) / rect.height;
+    const tiltX = (py - 0.5) * -maxTilt;
+    const tiltY = (px - 0.5) * maxTilt;
+    el.style.transform = `perspective(700px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-${lift}px) scale(${scaleAmount})`;
+    el.style.setProperty("--mx", `${px * 100}%`);
+    el.style.setProperty("--my", `${py * 100}%`);
+  });
+  el.addEventListener("mouseenter", () => el.classList.add("is-hovering"));
+  el.addEventListener("mouseleave", () => {
+    el.classList.remove("is-hovering");
+    el.style.transform = "";
+  });
+}
+
 function truncate(str, max) {
   if (!str) return "";
   const clean = str.replace(/\s+/g, " ").trim();
@@ -108,8 +129,10 @@ function renderCurrentlyReading() {
 
   container.innerHTML = `
     <p class="kicker">Currently reading</p>
-    <img class="reading-cover" id="reading-cover-img" tabindex="0" role="button"
-         src="${resolveCoverUrl(book, "L")}" alt="Cover of ${escapeHtml(book.title)}">
+    <div class="reading-cover-wrap" id="reading-cover-wrap" tabindex="0" role="button">
+      <img class="reading-cover" id="reading-cover-img"
+           src="${resolveCoverUrl(book, "L")}" alt="Cover of ${escapeHtml(book.title)}">
+    </div>
     ${book.series ? `<p class="reading-series">${escapeHtml(book.series)}${book.seriesPosition ? " · Book " + book.seriesPosition : ""}</p>` : ""}
     <h1 class="reading-title">${escapeHtml(book.title)}</h1>
     <p class="reading-author">by ${escapeHtml(book.author)}</p>
@@ -121,11 +144,12 @@ function renderCurrentlyReading() {
     ${isAdmin ? `<button class="stamp-button-ghost" id="mark-finished-btn" style="margin-top:20px;">Mark as finished</button>` : ""}
   `;
 
-  const coverImg = document.getElementById("reading-cover-img");
-  coverImg.addEventListener("click", () => openBookCard(book.id));
-  coverImg.addEventListener("keydown", (e) => {
+  const coverWrap = document.getElementById("reading-cover-wrap");
+  coverWrap.addEventListener("click", () => openBookCard(book.id));
+  coverWrap.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") openBookCard(book.id);
   });
+  attachTiltEffect(coverWrap, { maxTilt: 6, lift: 4, scaleAmount: 1.015 });
 
   if (isAdmin) {
     const slider = document.getElementById("progress-slider");
@@ -203,6 +227,7 @@ function renderShelf(containerId, books, badgeType) {
     el.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") openBookCard(el.dataset.id);
     });
+    attachTiltEffect(el);
   });
 }
 
@@ -349,7 +374,7 @@ function openBookCard(id) {
         showToast(`Refreshed "${book.title}" from Google Books.`);
         openBookCard(book.id);
       } catch (err) {
-        statusEl.textContent = "Couldn't fetch that — check the ID/URL and try again.";
+        statusEl.textContent = `Couldn't fetch that: ${err.message}`;
       }
     });
     document.getElementById("bc-delete").addEventListener("click", () => {
@@ -412,12 +437,33 @@ function renderStarRating(container, rating, editable, onChange) {
 // ------------------------------------------------------------
 const track = document.getElementById("track");
 const dots = document.querySelectorAll(".nav-dot");
+const ribbonMarker = document.getElementById("ribbon-marker");
 
 function goToPanel(index) {
-  currentPanel = Math.max(0, Math.min(PANEL_COUNT - 1, index));
-  track.style.transform = `translateX(-${currentPanel * 100}vw)`;
+  const newPanel = Math.max(0, Math.min(PANEL_COUNT - 1, index));
+  if (newPanel === currentPanel) return;
+
+  const fromX = -currentPanel * 100;
+  const toX = -newPanel * 100;
+  currentPanel = newPanel;
+
+  track.style.setProperty("--from-x", `${fromX}vw`);
+  track.style.setProperty("--to-x", `${toX}vw`);
+  track.classList.remove("is-turning");
+  void track.offsetWidth; // force reflow so the animation restarts each time
+  track.classList.add("is-turning");
+
   dots.forEach((d, i) => d.classList.toggle("is-active", i === currentPanel));
+  positionRibbonMarker();
 }
+
+function positionRibbonMarker() {
+  const activeDot = dots[currentPanel];
+  if (!activeDot || !ribbonMarker) return;
+  const x = activeDot.offsetLeft + activeDot.offsetWidth / 2 - ribbonMarker.offsetWidth / 2;
+  ribbonMarker.style.transform = `translateX(${x}px)`;
+}
+positionRibbonMarker(); // set initial position on load
 
 document.getElementById("nav-prev").addEventListener("click", () => goToPanel(currentPanel - 1));
 document.getElementById("nav-next").addEventListener("click", () => goToPanel(currentPanel + 1));
