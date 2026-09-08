@@ -1,14 +1,18 @@
 // ============================================================
 // GOOGLE BOOKS API KEY
 //
-// Kept in its own file, separate from googlebooks.js, so that future
-// updates to that file's logic never accidentally overwrite your key
-// with the placeholder again.
+// The __GOOGLE_BOOKS_API_KEY__ placeholder below is filled in
+// automatically by the GitHub Actions workflow at deploy time, pulling
+// from your repo's Settings → Secrets and variables → Actions. This file
+// itself never contains your real key.
 //
-// Setup instructions are in the README (or see the comment at the top
-// of js/googlebooks.js) — short version: console.cloud.google.com →
-// select your Firebase project → enable "Books API" → Credentials →
-// Create API key → restrict it to Books API → paste it below.
+// For real protection on top of that (recommended for this key, unlike
+// Firebase's config): add an HTTP referrer restriction in Google Cloud
+// Console → Credentials → your key → Application restrictions → HTTP
+// referrers → limit it to your GitHub Pages URL (e.g.
+// https://yourusername.github.io/*). That way the key only works when
+// called from your own site, even though the deployed page still has to
+// contain the key's value for the browser to use it.
 // ============================================================
-export const GOOGLE_BOOKS_API_KEY =
-	import.meta.env?.VITE_GOOGLE_BOOKS_API_KEY ?? "";
+
+export const GOOGLE_BOOKS_API_KEY = "__GOOGLE_BOOKS_API_KEY__";

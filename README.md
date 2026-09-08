@@ -9,8 +9,22 @@ Book metadata (covers, subjects/tags) comes from the free [OpenLibrary API](http
 1. Go to the [Firebase console](https://console.firebase.google.com/) → **Add project** (use your existing account).
 2. In the project, go to **Build → Firestore Database → Create database**. Start in **production mode** (rules below lock it down).
 3. Go to **Build → Authentication → Get started → Email/Password → Enable**. Then **Users → Add user** and create yourself an account — this is how you'll sign in as the site's "librarian" to add books, rate things, and import your CSV. The site has no public sign-up form on purpose.
-4. Go to **Project settings → General → Your apps → Add app → Web (`</>`)**. Name it anything. Copy the `firebaseConfig` object it gives you.
-5. Paste those values into `js/firebase-config.js`, replacing the placeholders.
+4. Go to **Project settings → General → Your apps → Add app → Web (`</>`)**. Name it anything. Copy the `firebaseConfig` object it gives you — you'll need these values in step 1a below, not pasted directly into the file.
+
+### 1a. Keep your keys out of the repo with GitHub Actions
+
+`js/firebase-config.js` and `js/google-books-config.js` contain placeholder tokens (like `__FIREBASE_API_KEY__`) instead of real values. A GitHub Actions workflow (`.github/workflows/deploy.yml`) fills them in automatically at deploy time, pulling from repo secrets — so your real keys never get committed.
+
+1. In your repo, go to **Settings → Secrets and variables → Actions → New repository secret**, and add each of these (paste the matching value from your Firebase config / Google Books key):
+   - `FIREBASE_API_KEY`
+   - `FIREBASE_PROJECT_ID`
+   - `FIREBASE_MESSAGING_SENDER_ID`
+   - `FIREBASE_APP_ID`
+   - `GOOGLE_BOOKS_API_KEY`
+2. Go to **Settings → Pages → Build and deployment → Source**, and change it to **GitHub Actions** (instead of "Deploy from a branch"). The included workflow handles building and publishing from here on.
+3. Push to `main`. The **Actions** tab will show the workflow running — once it finishes, your site is live with the real values baked into the deployed output only, not the source you pushed.
+
+Note: `authDomain` and `storageBucket` are left as plain values in `firebase-config.js` rather than secrets, since they're just your project ID with a fixed suffix — not sensitive on their own.
 
 ### Firestore security rules
 
@@ -52,9 +66,7 @@ Your GoodReads star ratings (whole numbers, 1–5) import as-is. Since the site 
 
 ## 4. Deploy to GitHub Pages
 
-1. Push this folder to a GitHub repo.
-2. Repo → **Settings → Pages → Source: Deploy from a branch**, pick `main` and `/root`.
-3. Your site will be live at `https://<username>.github.io/<repo>/` within a minute or two.
+Covered in step 1a above (Pages source set to GitHub Actions, secrets added). Once that's done, every push to `main` redeploys automatically — no separate deploy step needed. Your site lives at `https://<username>.github.io/<repo>/`.
 
 ## How the taste-match score works
 
