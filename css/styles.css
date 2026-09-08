@@ -29,7 +29,6 @@ html, body {
   color: var(--paper);
   font-family: var(--sans);
   overflow: hidden;
-  perspective: 2200px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -109,15 +108,8 @@ button { font-family: var(--sans); cursor: pointer; }
   width: 300vw;
   height: 100vh;
   transform: translateX(0);
+  transition: transform .5s cubic-bezier(.65,0,.35,1);
   touch-action: pan-y;
-}
-.track.is-turning {
-  animation: pageTurn .55s cubic-bezier(.65,0,.35,1) forwards;
-}
-@keyframes pageTurn {
-  0%   { transform: translateX(var(--from-x, 0)) rotateY(0deg); }
-  45%  { transform: translateX(calc((var(--from-x, 0) + var(--to-x, 0)) / 2)) rotateY(-5deg); }
-  100% { transform: translateX(var(--to-x, 0)) rotateY(0deg); }
 }
 
 .panel {
@@ -131,6 +123,14 @@ button { font-family: var(--sans); cursor: pointer; }
 }
 .panel::-webkit-scrollbar { width: 8px; }
 .panel::-webkit-scrollbar-thumb { background: var(--cloth-bright); border-radius: 4px; }
+
+.panel.is-entering {
+  animation: panelSettle .45s cubic-bezier(.22, 1, .36, 1);
+}
+@keyframes panelSettle {
+  from { transform: perspective(1200px) rotateY(var(--enter-rotate, 8deg)); opacity: .92; }
+  to   { transform: perspective(1200px) rotateY(0deg); opacity: 1; }
+}
 
 /* ---------- Panel 1: Currently Reading ---------- */
 .panel-reading { display: flex; align-items: center; justify-content: center; position: relative; }

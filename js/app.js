@@ -443,15 +443,21 @@ function goToPanel(index) {
   const newPanel = Math.max(0, Math.min(PANEL_COUNT - 1, index));
   if (newPanel === currentPanel) return;
 
-  const fromX = -currentPanel * 100;
-  const toX = -newPanel * 100;
+  const direction = newPanel > currentPanel ? "forward" : "backward";
   currentPanel = newPanel;
+  track.style.transform = `translateX(-${currentPanel * 100}vw)`;
 
-  track.style.setProperty("--from-x", `${fromX}vw`);
-  track.style.setProperty("--to-x", `${toX}vw`);
-  track.classList.remove("is-turning");
-  void track.offsetWidth; // force reflow so the animation restarts each time
-  track.classList.add("is-turning");
+  // A small, well-anchored "settle" flourish on just the incoming panel —
+  // hinged at its own leading edge, not the whole 3-wide strip (rotating
+  // the entire strip looked exaggerated since its pivot sits off-screen).
+  const enteringPanel = document.querySelector(`.panel[data-panel="${currentPanel}"]`);
+  if (enteringPanel) {
+    enteringPanel.style.transformOrigin = direction === "forward" ? "left center" : "right center";
+    enteringPanel.style.setProperty("--enter-rotate", direction === "forward" ? "-8deg" : "8deg");
+    enteringPanel.classList.remove("is-entering");
+    void enteringPanel.offsetWidth; // force reflow so the animation restarts each time
+    enteringPanel.classList.add("is-entering");
+  }
 
   dots.forEach((d, i) => d.classList.toggle("is-active", i === currentPanel));
   positionRibbonMarker();
