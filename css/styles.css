@@ -17,6 +17,16 @@
 
   --serif: "Source Serif 4", Georgia, serif;
   --sans: "Work Sans", -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Living Library ambient state — read/written by app.js per active panel
+     and per currently-reading cover; see applyAmbient() and sampleAmbientColor() */
+  --ambient: var(--marigold);
+  --glow-x: 50%;
+  --glow-y: 28%;
+  --glow-opacity: .38;
+  --glow-size: 760px;
+  --shelf-shift: 0px;
+  --shelf-opacity: .12;
 }
 
 * { box-sizing: border-box; }
@@ -40,14 +50,47 @@ html, body {
 button { font-family: var(--sans); cursor: pointer; }
 
 /* ============================================================
-   Ambient backdrop
+   Ambient backdrop — Living Library scene
    ============================================================ */
-.room-backdrop {
-  position: fixed;
+.room-scene { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: var(--bg); }
+
+/* Blurred shelf silhouette, drifts opposite the active panel for parallax depth */
+.scene-shelves {
+  position: absolute;
+  left: -10%; right: -10%; bottom: -6%;
+  width: 120%; height: 58%;
+  opacity: var(--shelf-opacity);
+  filter: blur(1.5px) saturate(.85);
+  transform: translateX(var(--shelf-shift));
+  transition: transform 1.4s cubic-bezier(.22,1,.36,1), opacity 1.1s ease;
+  pointer-events: none;
+}
+
+/* Ambient glow — position/size/opacity shift per panel (applyAmbient),
+   color is sampled live from the currently-reading cover (sampleAmbientColor) */
+.scene-glow {
+  position: absolute;
   inset: 0;
-  z-index: 0;
-  background: var(--bg);
-  border-top: 8px solid var(--marigold);
+  background: radial-gradient(var(--glow-size) calc(var(--glow-size) * .8) at var(--glow-x) var(--glow-y), var(--ambient) 0%, transparent 62%);
+  opacity: var(--glow-opacity);
+  mix-blend-mode: screen;
+  filter: blur(6px);
+  transition: opacity 1.1s ease, background-position 1.1s ease;
+  pointer-events: none;
+}
+
+.scene-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(120% 90% at 50% 40%, transparent 40%, rgba(10,11,13,.75) 100%);
+  pointer-events: none;
+}
+
+.scene-motes { position: absolute; inset: 0; opacity: .5; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-motes { display: none; }
+  .scene-shelves, .scene-glow { transition: none; }
 }
 
 /* ============================================================
@@ -158,8 +201,9 @@ button { font-family: var(--sans); cursor: pointer; }
   height: 315px;
   object-fit: cover;
   border-radius: 0;
-  box-shadow: 16px 16px 0 var(--cloth);
+  box-shadow: 16px 16px 0 var(--cloth), 0 30px 70px -18px rgba(0,0,0,.7), 0 0 90px -14px var(--ambient);
   cursor: pointer;
+  transition: box-shadow 1.1s ease;
 }
 
 .reading-series { font-size: .8rem; color: var(--cloth-bright); font-weight: 600; margin: 0 0 8px; }

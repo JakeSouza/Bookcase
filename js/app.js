@@ -90,6 +90,97 @@ function seriesAverages(books) {
 }
 
 // ------------------------------------------------------------
+// Living Library ambient scene — glow position/size per panel, a shelf
+// silhouette that drifts opposite the panel change for parallax depth,
+// a glow color sampled live from the currently-reading cover, and a
+// canvas of drifting dust motes.
+// ------------------------------------------------------------
+const AMBIENT_BY_PANEL = [
+  // Reading nook: tight, bright spotlight near the top of the panel
+  { x: "50%", y: "26%", opacity: .42, size: "760px", shelf: "0px",    shelfOpacity: .10 },
+  // The Shelf: wider, dimmer — like stepping further into the stacks
+  { x: "20%", y: "10%", opacity: .22, size: "900px", shelf: "-70px",  shelfOpacity: .17 },
+  // The Waiting Stack: mirrored to the other side
+  { x: "80%", y: "8%",  opacity: .22, size: "900px", shelf: "-140px", shelfOpacity: .17 },
+];
+
+function applyAmbient(panelIndex) {
+  const a = AMBIENT_BY_PANEL[panelIndex];
+  if (!a) return;
+  const root = document.documentElement.style;
+  root.setProperty("--glow-x", a.x);
+  root.setProperty("--glow-y", a.y);
+  root.setProperty("--glow-opacity", a.opacity);
+  root.setProperty("--glow-size", a.size);
+  root.setProperty("--shelf-shift", a.shelf);
+  root.setProperty("--shelf-opacity", a.shelfOpacity);
+}
+
+// Samples the currently-reading cover's average color and uses it as the
+// glow tint, so the reading nook always feels lit *by that book*. Covers
+// come from OpenLibrary (CORS-friendly) or a Google Books thumbnail
+// (often not) — if sampling fails for any reason, fall back to marigold
+// rather than leaving a stale color or throwing.
+function sampleAmbientColor(imgEl) {
+  try {
+    const c = document.createElement("canvas");
+    c.width = 24;
+    c.height = 24;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(imgEl, 0, 0, 24, 24);
+    const data = ctx.getImageData(0, 0, 24, 24).data;
+    let r = 0, g = 0, b = 0, n = 0;
+    for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; n++; }
+    r = Math.round(r / n); g = Math.round(g / n); b = Math.round(b / n);
+    // Push toward warmer/more saturated so it reads as a glow, not a smudge
+    const boost = (v, f = 1.25) => Math.min(255, Math.round(v * f));
+    const ambient = `rgb(${boost(r)}, ${boost(g, 1.1)}, ${boost(b, 0.9)})`;
+    document.documentElement.style.setProperty("--ambient", ambient);
+  } catch {
+    document.documentElement.style.setProperty("--ambient", "#E8A93B");
+  }
+}
+
+(function initDustMotes() {
+  const canvas = document.getElementById("scene-motes");
+  if (!canvas || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const ctx = canvas.getContext("2d");
+  let W, H, mx = 0.5, my = 0.3;
+  function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
+  resize();
+  addEventListener("resize", resize);
+  addEventListener("mousemove", (e) => { mx = e.clientX / innerWidth; my = e.clientY / innerHeight; });
+
+  const isMobile = matchMedia("(max-width: 640px)").matches;
+  const motes = Array.from({ length: isMobile ? 20 : 46 }, () => ({
+    x: Math.random(), y: Math.random(),
+    r: Math.random() * 1.6 + .4,
+    s: Math.random() * .15 + .03,
+    phase: Math.random() * Math.PI * 2,
+  }));
+
+  function tick(t) {
+    ctx.clearRect(0, 0, W, H);
+    const parx = (mx - 0.5) * 14, pary = (my - 0.5) * 14;
+    ctx.fillStyle = "rgba(243,239,227,0.55)";
+    motes.forEach((m) => {
+      const y = (((m.y * H - t * 0.02 * m.s) % H) + H) % H;
+      const x = m.x * W + Math.sin(t * 0.0006 + m.phase) * 10 + parx * m.r;
+      const flicker = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.0007 + m.phase));
+      ctx.globalAlpha = flicker * 0.6;
+      ctx.beginPath();
+      ctx.arc(x, y + pary * m.r * 0.3, m.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+})();
+
+applyAmbient(0); // initial state for the reading panel, which loads active
+
+// ------------------------------------------------------------
 // Firestore live data
 // ------------------------------------------------------------
 onSnapshot(collection(db, "books"), (snap) => {
@@ -130,7 +221,7 @@ function renderCurrentlyReading() {
   container.innerHTML = `
     <p class="kicker">Currently reading</p>
     <div class="reading-cover-wrap" id="reading-cover-wrap" tabindex="0" role="button">
-      <img class="reading-cover" id="reading-cover-img"
+      <img class="reading-cover" id="reading-cover-img" crossorigin="anonymous"
            src="${resolveCoverUrl(book, "L")}" alt="Cover of ${escapeHtml(book.title)}">
     </div>
     ${book.series ? `<p class="reading-series">${escapeHtml(book.series)}${book.seriesPosition ? " · Book " + book.seriesPosition : ""}</p>` : ""}
@@ -150,6 +241,10 @@ function renderCurrentlyReading() {
     if (e.key === "Enter" || e.key === " ") openBookCard(book.id);
   });
   attachTiltEffect(coverWrap, { maxTilt: 6, lift: 4, scaleAmount: 1.015 });
+
+  const coverImg = document.getElementById("reading-cover-img");
+  if (coverImg.complete) sampleAmbientColor(coverImg);
+  else coverImg.addEventListener("load", () => sampleAmbientColor(coverImg));
 
   if (isAdmin) {
     const slider = document.getElementById("progress-slider");
@@ -479,6 +574,7 @@ function goToPanel(index) {
   currentPanel = newPanel;
   dots.forEach((d, i) => d.classList.toggle("is-active", i === currentPanel));
   positionRibbonMarker();
+  applyAmbient(currentPanel);
 }
 
 function positionRibbonMarker() {
