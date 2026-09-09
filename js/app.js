@@ -531,59 +531,17 @@ function renderStarRating(container, rating, editable, onChange) {
 // Swipe / panel navigation
 // ------------------------------------------------------------
 const track = document.getElementById("track");
-const panels = document.querySelectorAll(".panel");
 const dots = document.querySelectorAll(".nav-dot");
-const ribbonMarker = document.getElementById("ribbon-marker");
 
 function goToPanel(index) {
   const newPanel = Math.max(0, Math.min(PANEL_COUNT - 1, index));
   if (newPanel === currentPanel) return;
 
-  const outgoingPanel = document.querySelector(`.panel[data-panel="${currentPanel}"]`);
-  const incomingPanel = document.querySelector(`.panel[data-panel="${newPanel}"]`);
-  const direction = newPanel > currentPanel ? "forward" : "backward";
-  const delta = direction === "forward" ? -180 : 180; // both panels rotate the same way, like one physical page
-
-  // Snap every uninvolved panel to its canonical hidden angle instantly —
-  // harmless since it's invisible either way, and keeps the bookkeeping
-  // simple no matter how many flips have happened before this one.
-  panels.forEach((p) => {
-    if (p !== outgoingPanel && p !== incomingPanel) {
-      p.style.transition = "none";
-      p.style.transform = "rotateY(180deg)";
-    }
-  });
-
-  // Snap the two panels involved to a canonical starting angle (no
-  // animation), then immediately animate to the real target — this is
-  // what makes every flip look identical regardless of prior state.
-  outgoingPanel.style.transition = "none";
-  outgoingPanel.style.transform = "rotateY(0deg)";
-  incomingPanel.style.transition = "none";
-  incomingPanel.style.transform = "rotateY(180deg)";
-  void track.offsetWidth; // force the snap above to apply before animating
-
-  outgoingPanel.style.transition = "";
-  incomingPanel.style.transition = "";
-  outgoingPanel.style.transform = `rotateY(${delta}deg)`;
-  incomingPanel.style.transform = `rotateY(${180 + delta}deg)`; // lands on 0 or 360 — visually identical
-
-  outgoingPanel.classList.remove("is-active-panel");
-  incomingPanel.classList.add("is-active-panel");
-
   currentPanel = newPanel;
+  track.style.transform = `translateX(-${(100 / PANEL_COUNT) * currentPanel}%)`;
   dots.forEach((d, i) => d.classList.toggle("is-active", i === currentPanel));
-  positionRibbonMarker();
   applyAmbient(currentPanel);
 }
-
-function positionRibbonMarker() {
-  const activeDot = dots[currentPanel];
-  if (!activeDot || !ribbonMarker) return;
-  const x = activeDot.offsetLeft + activeDot.offsetWidth / 2 - ribbonMarker.offsetWidth / 2;
-  ribbonMarker.style.transform = `translateX(${x}px)`;
-}
-positionRibbonMarker(); // set initial position on load
 
 document.getElementById("nav-prev").addEventListener("click", () => goToPanel(currentPanel - 1));
 document.getElementById("nav-next").addEventListener("click", () => goToPanel(currentPanel + 1));
