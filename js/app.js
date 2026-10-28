@@ -62,7 +62,7 @@ function truncate(str, max) {
 // text, render the safe subset as real formatting. Everything outside the
 // whitelist is unwrapped and every attribute is stripped, so API content can
 // never inject scripts, links, or styles into the page.
-function descriptionToHtml(raw, maxChars = Infinity) {
+function descriptionToHtml(raw, maxChars = Infinity, opts = {}) {
   if (!raw) return "";
   const hasTags = /<\/?[a-z][^>]*>/i.test(raw);
   if (!hasTags) {
@@ -83,6 +83,20 @@ function descriptionToHtml(raw, maxChars = Infinity) {
   } while (disallowed.length);
   for (const el of parsed.body.querySelectorAll("*")) {
     while (el.attributes.length) el.removeAttribute(el.attributes[0].name);
+  }
+
+  if (opts.flow) {
+    // Compact mode for tight spaces (the hero blurb): Google Books
+    // descriptions put a <br> after every sentence, which would stretch the
+    // card vertically. Treat line and paragraph breaks as spaces so the
+    // blurb stays one flowing paragraph; only the bold/italic formatting
+    // survives as structure.
+    for (const br of [...parsed.body.querySelectorAll("br")]) {
+      br.replaceWith(parsed.createTextNode(" "));
+    }
+    for (const p of [...parsed.body.querySelectorAll("p")]) {
+      p.replaceWith(parsed.createTextNode(" "), ...p.childNodes, parsed.createTextNode(" "));
+    }
   }
 
   if (maxChars !== Infinity) {
@@ -230,7 +244,7 @@ function renderCurrentlyReading() {
 
   const progress = toNum(book.progressPercent) ?? 0;
   const blurb = book.description
-    ? '<div class="reading-blurb">' + descriptionToHtml(book.description, 420) + "</div>"
+    ? '<div class="reading-blurb">' + descriptionToHtml(book.description, 420, { flow: true }) + "</div>"
     : isAdmin
     ? '<p class="reading-blurb reading-blurb-empty">No description yet — open this book’s card and use "Reload from OpenLibrary" to fetch one.</p>'
     : "";
