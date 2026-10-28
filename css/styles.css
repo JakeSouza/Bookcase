@@ -130,6 +130,10 @@ img { max-width: 100%; }
 .reading-author { margin: 0; font-size: 14px; color: var(--paper-dim); }
 .reading-blurb { margin: 12px 0 0; max-width: 62ch; font-size: 14px; line-height: 1.65; color: #475569; }
 .reading-blurb-empty { font-style: italic; color: var(--paper-dim); }
+.reading-blurb p { margin: 0 0 10px; }
+.reading-blurb p:last-child { margin-bottom: 0; }
+.reading-blurb b, .reading-blurb strong { font-weight: 700; color: #334155; }
+.reading-blurb i, .reading-blurb em { font-style: italic; }
 .reading-progress-row { display: flex; align-items: center; gap: 12px; margin-top: 18px; flex-wrap: wrap; }
 .reading-progress-track { flex: 1; min-width: 160px; height: 8px; background: #E7EAF0; border-radius: 999px; overflow: hidden; }
 .reading-progress-fill { height: 100%; background: linear-gradient(90deg, var(--cloth), var(--cloth-bright)); border-radius: 999px; }

@@ -57,6 +57,58 @@ function truncate(str, max) {
   return clean.slice(0, max).replace(/\s+\S*$/, "") + "…";
 }
 
+// Google Books (and sometimes OpenLibrary) descriptions arrive as HTML
+// snippets (<b>, <i>, <br>, <p>). Instead of printing those tags as literal
+// text, render the safe subset as real formatting. Everything outside the
+// whitelist is unwrapped and every attribute is stripped, so API content can
+// never inject scripts, links, or styles into the page.
+function descriptionToHtml(raw, maxChars = Infinity) {
+  if (!raw) return "";
+  const hasTags = /<\/?[a-z][^>]*>/i.test(raw);
+  if (!hasTags) {
+    // Plain-text description: keep the old collapse-and-truncate behaviour.
+    return "<p>" + escapeHtml(truncate(raw, maxChars)) + "</p>";
+  }
+
+  const parsed = new DOMParser().parseFromString(raw, "text/html");
+  // Dangerous elements are removed outright, not unwrapped.
+  for (const el of [...parsed.body.querySelectorAll("script, style, iframe, object, embed, link, meta, img")]) {
+    el.remove();
+  }
+  const allowed = new Set(["B", "STRONG", "I", "EM", "U", "BR", "P"]);
+  let disallowed;
+  do {
+    disallowed = [...parsed.body.querySelectorAll("*")].filter((el) => !allowed.has(el.tagName));
+    for (const el of disallowed) el.replaceWith(...el.childNodes);
+  } while (disallowed.length);
+  for (const el of parsed.body.querySelectorAll("*")) {
+    while (el.attributes.length) el.removeAttribute(el.attributes[0].name);
+  }
+
+  if (maxChars !== Infinity) {
+    // Trim to a text-only character budget so no tag can end up half-open.
+    const textNodes = [];
+    const walker = parsed.createTreeWalker(parsed.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) textNodes.push(n);
+    let seen = 0;
+    for (const n of textNodes) {
+      if (seen >= maxChars) {
+        n.remove();
+      } else if (seen + n.data.length > maxChars) {
+        n.data = n.data.slice(0, maxChars - seen).replace(/\s+\S*$/, "") + "…";
+        seen = maxChars;
+      } else {
+        seen += n.data.length;
+      }
+    }
+    for (const p of [...parsed.body.querySelectorAll("p")]) {
+      if (!p.textContent.trim()) p.remove();
+    }
+  }
+
+  return parsed.body.innerHTML.trim();
+}
+
 function showToast(msg, ms = 3200) {
   const el = document.getElementById("toast");
   el.textContent = msg;
@@ -178,7 +230,7 @@ function renderCurrentlyReading() {
 
   const progress = toNum(book.progressPercent) ?? 0;
   const blurb = book.description
-    ? '<p class="reading-blurb">' + escapeHtml(truncate(book.description, 420)) + "</p>"
+    ? '<div class="reading-blurb">' + descriptionToHtml(book.description, 420) + "</div>"
     : isAdmin
     ? '<p class="reading-blurb reading-blurb-empty">No description yet — open this book’s card and use "Reload from OpenLibrary" to fetch one.</p>'
     : "";
