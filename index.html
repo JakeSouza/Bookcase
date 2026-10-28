@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="color-scheme" content="light">
-<meta name="description" content="The Reading Room â a personal library tracker: what Jake is reading now, what he's finished, and what's waiting on the shelf.">
+<meta name="description" content="The Reading Room — a personal library tracker: what Jake is reading now, what he's finished, and what's waiting on the shelf.">
 <meta name="theme-color" content="#F4F6F9">
 <title>The Reading Room</title>
 <link rel="preconnect" href="https://covers.openlibrary.org">
@@ -21,11 +21,11 @@
 <main class="page">
   <section class="greeting">
     <h1 id="greeting-h">Good evening, Jake</h1>
-    <p id="greeting-sub" class="greeting-sub">Loading your shelvesâ¦</p>
+    <p id="greeting-sub" class="greeting-sub">Loading your shelves…</p>
   </section>
   <section class="stats-row" aria-label="Library stats">
     <div class="stat-card"><div class="stat-label">Books finished</div><div class="stat-value" id="stat-finished">0</div></div>
-    <div class="stat-card"><div class="stat-label">Average rating</div><div class="stat-value" id="stat-avg">â</div></div>
+    <div class="stat-card"><div class="stat-label">Average rating</div><div class="stat-value" id="stat-avg">–</div></div>
     <div class="stat-card"><div class="stat-label">Authors discovered</div><div class="stat-value" id="stat-authors">0</div></div>
     <div class="stat-card"><div class="stat-label">Waiting to read</div><div class="stat-value" id="stat-queue">0</div></div>
   </section>
@@ -35,10 +35,10 @@
     </div>
   </section>
   <nav class="tabs" role="tablist" aria-label="Library sections">
-    <button class="tab-btn is-active" data-tab="shelf" type="button" role="tab" aria-selected="true">Finished Â· <span data-count="finished">0</span></button>
-    <button class="tab-btn" data-tab="tbr" type="button" role="tab" aria-selected="false">To read Â· <span data-count="queue">0</span></button>
+    <button class="tab-btn is-active" data-tab="shelf" type="button" role="tab" aria-selected="true">Finished · <span data-count="finished">0</span></button>
+    <button class="tab-btn" data-tab="tbr" type="button" role="tab" aria-selected="false">To read · <span data-count="queue">0</span></button>
   </nav>
-  <section class="tab-pane is-active" data-pane="shelf" role="tabpanel" aria-label="Books youâve read">
+  <section class="tab-pane is-active" data-pane="shelf" role="tabpanel" aria-label="Books you’ve read">
     <div class="shelf-head">
       <h2 class="shelf-title">The Shelf</h2>
       <label class="catalog-select">
@@ -46,8 +46,8 @@
         <select id="read-sort">
           <option value="rating-desc">Highest rated</option>
           <option value="series-desc">Highest rated series</option>
-          <option value="author-asc">Author, AâZ</option>
-          <option value="title-asc">Title, AâZ</option>
+          <option value="author-asc">Author, A–Z</option>
+          <option value="title-asc">Title, A–Z</option>
         </select>
       </label>
     </div>
@@ -61,8 +61,8 @@
         <select id="tbr-sort">
           <option value="match-desc">Best match to your taste</option>
           <option value="series-desc">Highest rated series</option>
-          <option value="author-asc">Author, AâZ</option>
-          <option value="title-asc">Title, AâZ</option>
+          <option value="author-asc">Author, A–Z</option>
+          <option value="title-asc">Title, A–Z</option>
         </select>
       </label>
     </div>
@@ -71,7 +71,7 @@
 </main>
 <div id="book-card" class="book-card" hidden>
   <div class="book-card-inner">
-    <button class="book-card-close" id="book-card-close" aria-label="Close">Ã</button>
+    <button class="book-card-close" id="book-card-close" aria-label="Close">×</button>
     <img id="bc-cover" class="bc-cover" alt="">
     <div class="bc-info">
       <p id="bc-series" class="bc-series"></p>
@@ -85,7 +85,7 @@
 </div>
 <div id="signin-panel" class="signin-panel" hidden>
   <div class="signin-inner">
-    <button class="book-card-close" id="signin-close" aria-label="Close">Ã</button>
+    <button class="book-card-close" id="signin-close" aria-label="Close">×</button>
     <h3>Librarian sign-in</h3>
     <p class="signin-copy">Sign in to add books, edit ratings, or import your GoodReads export.</p>
     <input id="signin-email" type="email" placeholder="Email" autocomplete="username">
@@ -98,7 +98,7 @@
   <div class="admin-drawer-panel">
     <h4>Add a book</h4>
     <input id="add-title" placeholder="Title">
-    <input id="add-author" placeholder="Author (optional â improves search)">
+    <input id="add-author" placeholder="Author (optional — improves search)">
     <button id="add-search" class="stamp-button stamp-button-full">Find on OpenLibrary</button>
     <div id="add-results" class="add-results"></div>
     <h4>Import GoodReads export</h4>
