@@ -20,37 +20,41 @@ let isAdmin = false;
 // ------------------------------------------------------------
 // Utilities
 // ------------------------------------------------------------
-// Deterministic "spine stripe" color per book, echoing a publisher's
-// genre-coded imprint colors — same book always gets the same stripe.
-const STRIPE_COLORS = ["#2E8177", "#E8A93B", "#8A8D94"];
-function stripeColor(str) {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  return STRIPE_COLORS[Math.abs(hash) % STRIPE_COLORS.length];
-}
+// Light-theme "no cover" placeholder, generated inline so it needs no
+// third-party service (placehold.co can be slow or unavailable) and always
+// matches the design.
+const PLACEHOLDER_COVER = "data:image/svg+xml," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">' +
+  '<rect width="300" height="450" fill="#E7EAF0"/>' +
+  '<path d="M150 118l38 76-76 0z" fill="#D3DAE4"/>' +
+  '<rect x="70" y="215" width="160" height="8" rx="4" fill="#D3DAE4"/>' +
+  '<rect x="90" y="232" width="120" height="8" rx="4" fill="#E2E8F0"/>' +
+  '<text x="150" y="285" font-family="sans-serif" font-size="15" fill="#94A3B8" text-anchor="middle">No cover</text>' +
+  '</svg>'
+);
 
 // A book's cover: OpenLibrary's cover if we have one, otherwise fall back
 // to a Google Books cover image gathered during import/backfill, otherwise
-// the generic placeholder.
+// the inline placeholder above.
 function resolveCoverUrl(book, size = "M") {
   if (book.coverId) return coverUrl(book.coverId, size);
   if (book.googleCoverUrl) return book.googleCoverUrl;
-  return coverUrl(null, size);
+  return PLACEHOLDER_COVER;
 }
 
-// Subtle hover lift — elements rise slightly on hover via the .is-hovering
-// class (all motion lives in CSS, so reduced-motion preferences just work).
-function attachTiltEffect(el) {
-  el.classList.add("tilt-target");
-  el.addEventListener("mouseenter", () => el.classList.add("is-hovering"));
-  el.addEventListener("mouseleave", () => el.classList.remove("is-hovering"));
+// Firestore values can arrive as strings (older imports, manual edits) â
+// always coerce before doing arithmetic or calling number methods.
+function toNum(v) {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 function truncate(str, max) {
   if (!str) return "";
   const clean = str.replace(/\s+/g, " ").trim();
   if (clean.length <= max) return clean;
-  return clean.slice(0, max).replace(/\s+\S*$/, "") + "…";
+  return clean.slice(0, max).replace(/\s+\S*$/, "") + "â¦";
 }
 
 function showToast(msg, ms = 3200) {
@@ -64,8 +68,9 @@ function showToast(msg, ms = 3200) {
 function seriesAverages(books) {
   const bySeriesRating = {};
   for (const b of books) {
-    if (!b.series || b.rating == null) continue;
-    (bySeriesRating[b.series] ||= []).push(b.rating);
+    const rating = toNum(b.rating);
+    if (!b.series || rating === null) continue;
+    (bySeriesRating[b.series] ||= []).push(rating);
   }
   const avg = {};
   for (const [series, ratings] of Object.entries(bySeriesRating)) {
@@ -77,17 +82,32 @@ function seriesAverages(books) {
 // ------------------------------------------------------------
 // Firestore live data
 // ------------------------------------------------------------
-onSnapshot(collection(db, "books"), (snap) => {
-  allBooks = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-  renderAll();
-});
+onSnapshot(
+  collection(db, "books"),
+  (snap) => {
+    allBooks = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    renderAll();
+  },
+  (err) => {
+    // Without this, a failed read (rules, quota, network) silently leaves
+    // the page stuck on "Loading your shelvesâ¦" with only a console error.
+    console.error("Failed to load books from Firestore:", err);
+    const sub = document.getElementById("greeting-sub");
+    if (sub) sub.textContent = "Couldnât reach the library â your shelves failed to load. Check your connection or Firestore rules, then reload.";
+    const shelf = document.getElementById("read-shelf");
+    const queue = document.getElementById("tbr-shelf");
+    const msg = "Library unavailable â see the browser console for details.";
+    if (shelf) shelf.innerHTML = '<p class="shelf-empty">' + msg + "</p>";
+    if (queue) queue.innerHTML = '<p class="shelf-empty">' + msg + "</p>";
+  }
+);
 
 function renderStats() {
   const read = allBooks.filter((b) => b.status === "read");
   const tbr = allBooks.filter((b) => b.status === "to-read");
   const reading = allBooks.find((b) => b.status === "reading");
-  const rated = read.filter((b) => b.rating != null);
-  const avg = rated.length ? rated.reduce((acc, b) => acc + b.rating, 0) / rated.length : null;
+  const rated = read.map((b) => toNum(b.rating)).filter((r) => r !== null);
+  const avg = rated.length ? rated.reduce((acc, r) => acc + r, 0) / rated.length : null;
   const authors = new Set(read.map((b) => b.author)).size;
 
   const set = (id, v) => {
@@ -95,7 +115,7 @@ function renderStats() {
     if (el) el.textContent = v;
   };
   set("stat-finished", String(read.length));
-  set("stat-avg", avg ? avg.toFixed(1) : "–");
+  set("stat-avg", avg ? avg.toFixed(1) : "â");
   set("stat-authors", String(authors));
   set("stat-queue", String(tbr.length));
 
@@ -107,22 +127,34 @@ function renderStats() {
   const sub = document.getElementById("greeting-sub");
   if (sub) {
     if (reading) {
-      const pct = reading.progressPercent ?? 0;
+      const pct = toNum(reading.progressPercent) ?? 0;
       sub.textContent = pct >= 100
-        ? "Almost done with “" + reading.title + "” — mark it finished to rate it."
-        : "You’re " + pct + "% into “" + reading.title + "”.";
+        ? "Almost done with \u201C" + reading.title + "\u201D\u2014 mark it finished to rate it."
+        : "You\u2019re " + pct + "% into \u201C" + reading.title + "\u201D.";
     } else {
-      sub.textContent = "Nothing on the nightstand — pick something from the queue.";
+      sub.textContent = "Nothing on the nightstand \u2014 pick something from the queue.";
     }
   }
 }
 
 function renderAll() {
-  renderStats();
-  renderCurrentlyReading();
-  renderReadShelf();
-  renderTbrShelf();
+  // Each section renders independently \u2014 one malformed book document can
+  // never blank out the whole page.
+  const sections = [
+    ["stats", renderStats],
+    ["currently reading", renderCurrentlyReading],
+    ["read shelf", renderReadShelf],
+    ["to-read shelf", renderTbrShelf],
+  ];
+  for (const [name, render] of sections) {
+    try {
+      render();
+    } catch (err) {
+      console.error("Render failed (" + name + "):", err);
+    }
+  }
 }
+
 
 // Time-of-day greeting, set once on load.
 (function setGreeting() {
@@ -133,7 +165,7 @@ function renderAll() {
 })();
 
 // ------------------------------------------------------------
-// Panel 1 — Currently Reading
+// Panel 1 â Currently Reading
 // ------------------------------------------------------------
 function renderCurrentlyReading() {
   const container = document.getElementById("reading-content");
@@ -144,11 +176,11 @@ function renderCurrentlyReading() {
     return;
   }
 
-  const progress = book.progressPercent ?? 0;
+  const progress = toNum(book.progressPercent) ?? 0;
   const blurb = book.description
     ? '<p class="reading-blurb">' + escapeHtml(truncate(book.description, 420)) + "</p>"
     : isAdmin
-    ? '<p class="reading-blurb reading-blurb-empty">No description yet — open this book’s card and use "Reload from OpenLibrary" to fetch one.</p>'
+    ? '<p class="reading-blurb reading-blurb-empty">No description yet â open this bookâs card and use "Reload from OpenLibrary" to fetch one.</p>'
     : "";
 
   const progressControl = isAdmin
@@ -158,11 +190,11 @@ function renderCurrentlyReading() {
   container.innerHTML =
     '<div class="hero-grid">' +
       '<div class="reading-cover-wrap" id="reading-cover-wrap" tabindex="0" role="button">' +
-        '<img class="reading-cover" id="reading-cover-img" src="' + resolveCoverUrl(book, "L") + '" alt="Cover of ' + escapeHtml(book.title) + '">' +
+        '<img class="reading-cover" id="reading-cover-img" loading="lazy" decoding="async" src="' + resolveCoverUrl(book, "L") + '" alt="Cover of ' + escapeHtml(book.title) + '">' +
       "</div>" +
       '<div class="hero-info">' +
         '<p class="kicker">Reading now</p>' +
-        (book.series ? '<p class="reading-series">' + escapeHtml(book.series) + (book.seriesPosition ? " · Book " + book.seriesPosition : "") + "</p>" : "") +
+        (book.series ? '<p class="reading-series">' + escapeHtml(book.series) + (book.seriesPosition ? " Â· Book " + book.seriesPosition : "") + "</p>" : "") +
         '<h1 class="reading-title">' + escapeHtml(book.title) + "</h1>" +
         '<p class="reading-author">by ' + escapeHtml(book.author) + "</p>" +
         blurb +
@@ -185,7 +217,6 @@ function renderCurrentlyReading() {
   coverWrap.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") openBookCard(book.id);
   });
-  attachTiltEffect(coverWrap);
 
   if (isAdmin) {
     const slider = document.getElementById("progress-slider");
@@ -201,19 +232,28 @@ function renderCurrentlyReading() {
       }
     });
     slider.addEventListener("change", () => {
-      updateDoc(doc(db, "books", book.id), { progressPercent: parseInt(slider.value, 10) });
+      updateDoc(doc(db, "books", book.id), { progressPercent: parseInt(slider.value, 10) })
+        .catch((err) => {
+          console.error("Failed to save progress:", err);
+          showToast("Couldnât save your progress â check your connection and try again.");
+        });
     });
 
     document.getElementById("mark-finished-btn").addEventListener("click", async () => {
-      await updateDoc(doc(db, "books", book.id), { status: "read", progressPercent: 100 });
-      showToast('Marked "' + book.title + '" as finished — add a rating whenever you\u2019re ready.');
-      openBookCard(book.id);
+      try {
+        await updateDoc(doc(db, "books", book.id), { status: "read", progressPercent: 100 });
+        showToast('Marked "' + book.title + '" as finished â add a rating whenever you\u2019re ready.');
+        openBookCard(book.id);
+      } catch (err) {
+        console.error("Failed to mark book as finished:", err);
+        showToast("Couldnât update the book â check your connection and try again.");
+      }
     });
   }
 }
 
 // ------------------------------------------------------------
-// Panels 2 & 3 — Shelves
+// Panels 2 & 3 â Shelves
 // ------------------------------------------------------------
 function sortBooks(books, mode, seriesAvg) {
   const list = [...books];
@@ -262,8 +302,9 @@ function renderShelf(containerId, books, badgeType) {
   container.innerHTML = books
     .map((b) => {
       if (badgeType === "rating") {
-        const ratingHtml = b.rating != null
-          ? starsHtml(b.rating) + '<span class="rating-number">' + b.rating.toFixed(2).replace(/\.?0+$/, "") + "</span>"
+        const rating = toNum(b.rating);
+        const ratingHtml = rating !== null
+          ? starsHtml(rating) + '<span class="rating-number">' + rating.toFixed(2).replace(/\.?0+$/, "") + "</span>"
           : '<span class="unrated">Not yet rated</span>';
         return '<div class="cover-wrap">' +
           '<div class="book-cover-card" tabindex="0" role="button" data-id="' + b.id + '"' +
@@ -273,7 +314,7 @@ function renderShelf(containerId, books, badgeType) {
           '<div class="cover-rating">' + ratingHtml + "</div>" +
         "</div>";
       }
-      const score = b._match ?? null;
+      const score = toNum(b._match);
       return '<div class="tbr-row" tabindex="0" role="button" data-id="' + b.id + '">' +
         '<div class="tbr-cover" style="background-image:url(\'' + resolveCoverUrl(b, "M") + '\')"></div>' +
         '<div class="tbr-meta">' +
@@ -281,20 +322,12 @@ function renderShelf(containerId, books, badgeType) {
           '<div class="cover-author">' + escapeHtml(b.author) + "</div>" +
         "</div>" +
         '<div class="tbr-score">' +
-          '<div class="tbr-bar"><div class="tbr-bar-fill" style="width:' + (score ? score * 10 : 0) + '%"></div></div>' +
-          '<div class="tbr-num">' + (score != null ? score.toFixed(1) : "–") + "</div>" +
+          '<div class="tbr-bar"><div class="tbr-bar-fill" style="width:' + (score !== null ? score * 10 : 0) + '%"></div></div>' +
+          '<div class="tbr-num">' + (score !== null ? score.toFixed(1) : "â") + "</div>" +
         "</div>" +
       "</div>";
     })
     .join("");
-
-  container.querySelectorAll("[data-id]").forEach((el) => {
-    el.addEventListener("click", () => openBookCard(el.dataset.id));
-    el.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") openBookCard(el.dataset.id);
-    });
-    attachTiltEffect(el);
-  });
 }
 
 function renderReadShelf() {
@@ -305,7 +338,7 @@ function renderReadShelf() {
 }
 
 function renderTbrShelf() {
-  const read = allBooks.filter((b) => b.status === "read" && b.rating != null);
+  const read = allBooks.filter((b) => b.status === "read" && toNum(b.rating) !== null);
   const tbr = allBooks.filter((b) => b.status === "to-read");
   const avg = seriesAverages(allBooks.filter((b) => b.status === "read"));
 
@@ -316,6 +349,24 @@ function renderTbrShelf() {
 
 document.getElementById("read-sort").addEventListener("change", renderReadShelf);
 document.getElementById("tbr-sort").addEventListener("change", renderTbrShelf);
+
+// Event delegation: one listener per shelf container instead of one per
+// book, so re-renders (every Firestore snapshot) don't churn listeners.
+for (const shelfId of ["read-shelf", "tbr-shelf"]) {
+  const shelf = document.getElementById(shelfId);
+  shelf.addEventListener("click", (e) => {
+    const el = e.target.closest("[data-id]");
+    if (el) openBookCard(el.dataset.id);
+  });
+  shelf.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const el = e.target.closest("[data-id]");
+    if (el) {
+      e.preventDefault();
+      openBookCard(el.dataset.id);
+    }
+  });
+}
 
 // ------------------------------------------------------------
 // Book detail card
@@ -328,27 +379,33 @@ function openBookCard(id) {
 
   document.getElementById("bc-cover").src = resolveCoverUrl(book, "L");
   document.getElementById("bc-cover").alt = `Cover of ${book.title}`;
-    document.getElementById("bc-series").textContent = book.series
-    ? `${book.series}${book.seriesPosition ? " · Book " + book.seriesPosition : ""}`
+  document.getElementById("bc-series").textContent = book.series
+    ? `${book.series}${book.seriesPosition ? " Â· Book " + book.seriesPosition : ""}`
     : "";
   document.getElementById("bc-title").textContent = book.title;
   document.getElementById("bc-author").textContent = `by ${book.author}`;
-  document.getElementById("bc-tags").innerHTML = (book.tags || [])
+  const tags = Array.isArray(book.tags) ? book.tags : [];
+  document.getElementById("bc-tags").innerHTML = tags
     .slice(0, 6)
     .map((t) => `<span class="bc-tag">${escapeHtml(t)}</span>`)
     .join("");
 
   const ratingWrap = document.getElementById("bc-rating-wrap");
   if (book.status === "to-read") {
-    const score = computeMatchScore(
+    const score = toNum(book._match) ?? computeMatchScore(
       book,
-      allBooks.filter((b) => b.status === "read" && b.rating != null)
+      allBooks.filter((b) => b.status === "read" && toNum(b.rating) !== null)
     );
     ratingWrap.innerHTML = `<div class="bc-match-score">${score.toFixed(1)}<span style="font-size:1rem;color:var(--paper-dim)">/10</span></div><div class="bc-match-label">match to your taste</div>`;
   } else {
     ratingWrap.innerHTML = "";
-    renderStarRating(ratingWrap, book.rating || 0, isAdmin, (newRating) => {
-      updateDoc(doc(db, "books", book.id), { rating: newRating });
+    const rating = toNum(book.rating) ?? 0;
+    renderStarRating(ratingWrap, rating, isAdmin, (newRating) => {
+      updateDoc(doc(db, "books", book.id), { rating: newRating })
+        .catch((err) => {
+          console.error("Failed to save rating:", err);
+          showToast("Couldnât save that rating â check your connection and try again.");
+        });
     });
   }
 
@@ -373,7 +430,7 @@ function openBookCard(id) {
         <p id="bc-refresh-status" style="font-size:.75rem;color:var(--paper-dim);margin-top:6px;min-height:1em;"></p>
       </div>
       <div style="margin-top:16px;">
-        <label style="display:block;font-size:.78rem;color:var(--paper-dim);margin-bottom:4px;">Reload from Google Books (ID or URL — leave blank to search by title/author)</label>
+        <label style="display:block;font-size:.78rem;color:var(--paper-dim);margin-bottom:4px;">Reload from Google Books (ID or URL â leave blank to search by title/author)</label>
         <input id="bc-gbooks-input" placeholder="e.g. zyTCAlFPjgYC, or paste a books.google.com link"
                style="width:100%;margin-bottom:6px;padding:7px;background:var(--ink);color:var(--paper);border:1px solid var(--brass);border-radius:2px;">
         <button class="stamp-button stamp-button-ghost" id="bc-refresh-gbooks">Reload tags & description</button>
@@ -382,7 +439,10 @@ function openBookCard(id) {
       <button class="stamp-button stamp-button-ghost" id="bc-delete" style="margin-top:12px;">Remove from library</button>
     `;
     document.getElementById("bc-status-select").addEventListener("change", (e) => {
-      updateDoc(doc(db, "books", book.id), { status: e.target.value });
+      updateDoc(doc(db, "books", book.id), { status: e.target.value }).catch((err) => {
+        console.error("Failed to change status:", err);
+        showToast("Couldnât change the status â check your connection and try again.");
+      });
     });
     document.getElementById("bc-refresh-olid").addEventListener("click", async () => {
       const rawId = document.getElementById("bc-olid-input").value.trim();
@@ -391,7 +451,7 @@ function openBookCard(id) {
         statusEl.textContent = "Enter an OpenLibrary ID first.";
         return;
       }
-      statusEl.textContent = "Fetching…";
+      statusEl.textContent = "Fetchingâ¦";
       try {
         const data = await fetchWorkById(rawId);
         const updates = { workKey: data.workKey };
@@ -405,13 +465,13 @@ function openBookCard(id) {
         showToast(`Refreshed "${data.title || book.title}" from OpenLibrary.`);
         openBookCard(book.id); // re-render the card with the new data
       } catch (err) {
-        statusEl.textContent = "Couldn't find that OpenLibrary ID — double-check it and try again.";
+        statusEl.textContent = "Couldn't find that OpenLibrary ID â double-check it and try again.";
       }
     });
     document.getElementById("bc-refresh-gbooks").addEventListener("click", async () => {
       const rawId = document.getElementById("bc-gbooks-input").value.trim();
       const statusEl = document.getElementById("bc-gbooks-status");
-      statusEl.textContent = "Fetching…";
+      statusEl.textContent = "Fetchingâ¦";
       try {
         const gbook = rawId
           ? await fetchGoogleBookById(rawId)
@@ -423,7 +483,7 @@ function openBookCard(id) {
         }
 
         // An explicit reload overwrites the description (unlike the passive
-        // backfill, which only fills gaps) — this is a deliberate user action.
+        // backfill, which only fills gaps) â this is a deliberate user action.
         const updates = {};
         if (gbook.categories?.length) updates.tags = mergeTags(book.tags || [], gbook.categories);
         if (gbook.description) updates.description = gbook.description;
@@ -498,19 +558,44 @@ function renderStarRating(container, rating, editable, onChange) {
 }
 
 // ------------------------------------------------------------
-// Tab navigation — Finished / To read
+// Tab navigation â Finished / To read
 // ------------------------------------------------------------
 const tabButtons = document.querySelectorAll(".tab-btn");
 const tabPanes = document.querySelectorAll(".tab-pane");
 
+let activeTab = "shelf";
+
 function activateTab(name) {
-  tabButtons.forEach((b) => b.classList.toggle("is-active", b.dataset.tab === name));
-  tabPanes.forEach((p) => p.classList.toggle("is-active", p.dataset.pane === name));
+  activeTab = name;
+  tabButtons.forEach((b) => {
+    const isActive = b.dataset.tab === name;
+    b.classList.toggle("is-active", isActive);
+    b.setAttribute("aria-selected", String(isActive));
+  });
+  tabPanes.forEach((p) => {
+    const isActive = p.dataset.pane === name;
+    p.classList.toggle("is-active", isActive);
+    p.hidden = !isActive;
+  });
 }
 
 tabButtons.forEach((btn) => {
   btn.addEventListener("click", () => activateTab(btn.dataset.tab));
 });
+
+// Arrow-key support for the tab list, per the WAI-ARIA tabs pattern.
+document.querySelector(".tabs").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+  e.preventDefault();
+  const names = [...tabButtons].map((b) => b.dataset.tab);
+  const dir = e.key === "ArrowRight" ? 1 : -1;
+  const next = names[(names.indexOf(activeTab) + dir + names.length) % names.length];
+  activateTab(next);
+  tabButtons[names.indexOf(next)].focus();
+});
+
+// Apply the initial tab state (matches the markup's starting classes).
+activateTab("shelf");
 // ------------------------------------------------------------
 // Admin: sign-in
 // ------------------------------------------------------------
@@ -536,7 +621,7 @@ document.getElementById("signin-submit").addEventListener("click", async () => {
     await signInWithEmailAndPassword(auth, email, password);
     signinPanel.hidden = true;
   } catch (err) {
-    errorEl.textContent = "Couldn't sign in — check your email and password.";
+    errorEl.textContent = "Couldn't sign in â check your email and password.";
   }
 });
 
@@ -559,7 +644,7 @@ document.getElementById("add-search").addEventListener("click", async () => {
   const author = document.getElementById("add-author").value.trim();
   const resultsEl = document.getElementById("add-results");
   if (!title) return;
-  resultsEl.textContent = "Searching…";
+  resultsEl.textContent = "Searchingâ¦";
   try {
     const results = await searchBooks(title, author, 5);
     if (!results.length) {
@@ -570,7 +655,7 @@ document.getElementById("add-search").addEventListener("click", async () => {
       .map(
         (r, i) => `
         <div class="add-result-item">
-          <span>${escapeHtml(r.title)} — ${escapeHtml(r.author)}</span>
+          <span>${escapeHtml(r.title)} â ${escapeHtml(r.author)}</span>
           <span>
             <select id="add-status-${i}">
               <option value="to-read">To read</option>
@@ -603,28 +688,33 @@ document.getElementById("add-search").addEventListener("click", async () => {
             if (!r.coverId && gbook.coverUrl) googleCoverUrl = gbook.coverUrl;
           }
         } catch {
-          /* non-fatal — book still gets added with OpenLibrary data alone */
+          /* non-fatal â book still gets added with OpenLibrary data alone */
         }
-        await addDoc(collection(db, "books"), {
-          title: r.title,
-          author: r.author,
-          series: r.series || null,
-          seriesPosition: null,
-          status,
-          rating: null,
-          tags,
-          description,
-          coverId: r.coverId,
-          googleCoverUrl,
-          workKey: r.workKey,
-          source: "manual",
-          createdAt: serverTimestamp()
-        });
-        showToast(`Added "${r.title}" to your library.`);
+        try {
+          await addDoc(collection(db, "books"), {
+            title: r.title,
+            author: r.author,
+            series: r.series || null,
+            seriesPosition: null,
+            status,
+            rating: null,
+            tags,
+            description,
+            coverId: r.coverId,
+            googleCoverUrl,
+            workKey: r.workKey,
+            source: "manual",
+            createdAt: serverTimestamp()
+          });
+          showToast(`Added "${r.title}" to your library.`);
+        } catch (err) {
+          console.error("Failed to add book:", err);
+          showToast("Couldnât add that book â check your connection and try again.");
+        }
       });
     });
   } catch {
-    resultsEl.textContent = "Search failed — try again.";
+    resultsEl.textContent = "Search failed â try again.";
   }
 });
 
@@ -642,7 +732,7 @@ document.getElementById("csv-import-btn").addEventListener("click", async () => 
     const result = await importGoodreadsCSV(fileInput.files[0], (msg) => {
       statusEl.textContent = msg;
     });
-    statusEl.textContent = `Done — imported ${result.imported} of ${result.total} rows (${result.skipped} skipped).`;
+    statusEl.textContent = `Done â imported ${result.imported} of ${result.total} rows (${result.skipped} skipped).`;
   } catch (err) {
     statusEl.textContent = "Import failed: " + err.message;
   }
@@ -667,7 +757,7 @@ document.getElementById("backfill-btn").addEventListener("click", async (e) => {
   let enriched = 0;
   let firstError = null;
   for (const [i, book] of targets.entries()) {
-    statusEl.textContent = `(${i + 1}/${targets.length}) Checking "${book.title}"…`;
+    statusEl.textContent = `(${i + 1}/${targets.length}) Checking "${book.title}"â¦`;
     const updates = {};
     try {
       const gbook = await searchGoogleBooks(book.title, book.author);
@@ -682,13 +772,19 @@ document.getElementById("backfill-btn").addEventListener("click", async (e) => {
       if (!firstError) firstError = err.message;
       // leave googleEnriched unset so this book gets retried next run
     }
-    if (Object.keys(updates).length) await updateDoc(doc(db, "books", book.id), updates);
+    if (Object.keys(updates).length) {
+      try {
+        await updateDoc(doc(db, "books", book.id), updates);
+      } catch (err) {
+        if (!firstError) firstError = err.message;
+      }
+    }
     await new Promise((r) => setTimeout(r, 150)); // be polite to the free API
   }
 
   statusEl.textContent = firstError
-    ? `Done, but requests were failing — found data for ${enriched} of ${targets.length}. First error: ${firstError}`
-    : `Done — found new data for ${enriched} of ${targets.length} books checked.`;
+    ? `Done, but requests were failing â found data for ${enriched} of ${targets.length}. First error: ${firstError}`
+    : `Done â found new data for ${enriched} of ${targets.length} books checked.`;
   btn.disabled = false;
 });
 
