@@ -16,8 +16,6 @@ import { importGoodreadsCSV } from "./csv-import.js";
 // ------------------------------------------------------------
 let allBooks = [];
 let isAdmin = false;
-let currentPanel = 0;
-const PANEL_COUNT = 3;
 
 // ------------------------------------------------------------
 // Utilities
@@ -40,25 +38,12 @@ function resolveCoverUrl(book, size = "M") {
   return coverUrl(null, size);
 }
 
-// Cursor-tilt parallax + light-sheen sweep. Applies a 3D tilt toward the
-// cursor and a moving highlight, like light catching a glossy dust jacket.
-function attachTiltEffect(el, { maxTilt = 8, lift = 6, scaleAmount = 1.02 } = {}) {
+// Subtle hover lift — elements rise slightly on hover via the .is-hovering
+// class (all motion lives in CSS, so reduced-motion preferences just work).
+function attachTiltEffect(el) {
   el.classList.add("tilt-target");
-  el.addEventListener("mousemove", (e) => {
-    const rect = el.getBoundingClientRect();
-    const px = (e.clientX - rect.left) / rect.width;
-    const py = (e.clientY - rect.top) / rect.height;
-    const tiltX = (py - 0.5) * -maxTilt;
-    const tiltY = (px - 0.5) * maxTilt;
-    el.style.transform = `perspective(700px) rotateX(${tiltX}deg) rotateY(${tiltY}deg) translateY(-${lift}px) scale(${scaleAmount})`;
-    el.style.setProperty("--mx", `${px * 100}%`);
-    el.style.setProperty("--my", `${py * 100}%`);
-  });
   el.addEventListener("mouseenter", () => el.classList.add("is-hovering"));
-  el.addEventListener("mouseleave", () => {
-    el.classList.remove("is-hovering");
-    el.style.transform = "";
-  });
+  el.addEventListener("mouseleave", () => el.classList.remove("is-hovering"));
 }
 
 function truncate(str, max) {
@@ -90,97 +75,6 @@ function seriesAverages(books) {
 }
 
 // ------------------------------------------------------------
-// Living Library ambient scene — glow position/size per panel, a shelf
-// silhouette that drifts opposite the panel change for parallax depth,
-// a glow color sampled live from the currently-reading cover, and a
-// canvas of drifting dust motes.
-// ------------------------------------------------------------
-const AMBIENT_BY_PANEL = [
-  // Reading nook: tight, bright spotlight near the top of the panel
-  { x: "50%", y: "26%", opacity: .42, size: "760px", shelf: "0px",    shelfOpacity: .10 },
-  // The Shelf: wider, dimmer — like stepping further into the stacks
-  { x: "20%", y: "10%", opacity: .22, size: "900px", shelf: "-70px",  shelfOpacity: .17 },
-  // The Waiting Stack: mirrored to the other side
-  { x: "80%", y: "8%",  opacity: .22, size: "900px", shelf: "-140px", shelfOpacity: .17 },
-];
-
-function applyAmbient(panelIndex) {
-  const a = AMBIENT_BY_PANEL[panelIndex];
-  if (!a) return;
-  const root = document.documentElement.style;
-  root.setProperty("--glow-x", a.x);
-  root.setProperty("--glow-y", a.y);
-  root.setProperty("--glow-opacity", a.opacity);
-  root.setProperty("--glow-size", a.size);
-  root.setProperty("--shelf-shift", a.shelf);
-  root.setProperty("--shelf-opacity", a.shelfOpacity);
-}
-
-// Samples the currently-reading cover's average color and uses it as the
-// glow tint, so the reading nook always feels lit *by that book*. Covers
-// come from OpenLibrary (CORS-friendly) or a Google Books thumbnail
-// (often not) — if sampling fails for any reason, fall back to marigold
-// rather than leaving a stale color or throwing.
-function sampleAmbientColor(imgEl) {
-  try {
-    const c = document.createElement("canvas");
-    c.width = 24;
-    c.height = 24;
-    const ctx = c.getContext("2d");
-    ctx.drawImage(imgEl, 0, 0, 24, 24);
-    const data = ctx.getImageData(0, 0, 24, 24).data;
-    let r = 0, g = 0, b = 0, n = 0;
-    for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; n++; }
-    r = Math.round(r / n); g = Math.round(g / n); b = Math.round(b / n);
-    // Push toward warmer/more saturated so it reads as a glow, not a smudge
-    const boost = (v, f = 1.25) => Math.min(255, Math.round(v * f));
-    const ambient = `rgb(${boost(r)}, ${boost(g, 1.1)}, ${boost(b, 0.9)})`;
-    document.documentElement.style.setProperty("--ambient", ambient);
-  } catch {
-    document.documentElement.style.setProperty("--ambient", "#E8A93B");
-  }
-}
-
-(function initDustMotes() {
-  const canvas = document.getElementById("scene-motes");
-  if (!canvas || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  const ctx = canvas.getContext("2d");
-  let W, H, mx = 0.5, my = 0.3;
-  function resize() { W = canvas.width = innerWidth; H = canvas.height = innerHeight; }
-  resize();
-  addEventListener("resize", resize);
-  addEventListener("mousemove", (e) => { mx = e.clientX / innerWidth; my = e.clientY / innerHeight; });
-
-  const isMobile = matchMedia("(max-width: 640px)").matches;
-  const motes = Array.from({ length: isMobile ? 20 : 46 }, () => ({
-    x: Math.random(), y: Math.random(),
-    r: Math.random() * 1.6 + .4,
-    s: Math.random() * .15 + .03,
-    phase: Math.random() * Math.PI * 2,
-  }));
-
-  function tick(t) {
-    ctx.clearRect(0, 0, W, H);
-    const parx = (mx - 0.5) * 14, pary = (my - 0.5) * 14;
-    ctx.fillStyle = "rgba(243,239,227,0.55)";
-    motes.forEach((m) => {
-      const y = (((m.y * H - t * 0.02 * m.s) % H) + H) % H;
-      const x = m.x * W + Math.sin(t * 0.0006 + m.phase) * 10 + parx * m.r;
-      const flicker = 0.4 + 0.6 * Math.abs(Math.sin(t * 0.0007 + m.phase));
-      ctx.globalAlpha = flicker * 0.6;
-      ctx.beginPath();
-      ctx.arc(x, y + pary * m.r * 0.3, m.r, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.globalAlpha = 1;
-    requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
-})();
-
-applyAmbient(0); // initial state for the reading panel, which loads active
-
-// ------------------------------------------------------------
 // Firestore live data
 // ------------------------------------------------------------
 onSnapshot(collection(db, "books"), (snap) => {
@@ -188,11 +82,55 @@ onSnapshot(collection(db, "books"), (snap) => {
   renderAll();
 });
 
+function renderStats() {
+  const read = allBooks.filter((b) => b.status === "read");
+  const tbr = allBooks.filter((b) => b.status === "to-read");
+  const reading = allBooks.find((b) => b.status === "reading");
+  const rated = read.filter((b) => b.rating != null);
+  const avg = rated.length ? rated.reduce((acc, b) => acc + b.rating, 0) / rated.length : null;
+  const authors = new Set(read.map((b) => b.author)).size;
+
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v;
+  };
+  set("stat-finished", String(read.length));
+  set("stat-avg", avg ? avg.toFixed(1) : "–");
+  set("stat-authors", String(authors));
+  set("stat-queue", String(tbr.length));
+
+  const finCount = document.querySelector('[data-count="finished"]');
+  if (finCount) finCount.textContent = String(read.length);
+  const queueCount = document.querySelector('[data-count="queue"]');
+  if (queueCount) queueCount.textContent = String(tbr.length);
+
+  const sub = document.getElementById("greeting-sub");
+  if (sub) {
+    if (reading) {
+      const pct = reading.progressPercent ?? 0;
+      sub.textContent = pct >= 100
+        ? "Almost done with “" + reading.title + "” — mark it finished to rate it."
+        : "You’re " + pct + "% into “" + reading.title + "”.";
+    } else {
+      sub.textContent = "Nothing on the nightstand — pick something from the queue.";
+    }
+  }
+}
+
 function renderAll() {
+  renderStats();
   renderCurrentlyReading();
   renderReadShelf();
   renderTbrShelf();
 }
+
+// Time-of-day greeting, set once on load.
+(function setGreeting() {
+  const h = new Date().getHours();
+  const word = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+  const el = document.getElementById("greeting-h");
+  if (el) el.textContent = word + ", Jake";
+})();
 
 // ------------------------------------------------------------
 // Panel 1 — Currently Reading
@@ -202,56 +140,65 @@ function renderCurrentlyReading() {
   const book = allBooks.find((b) => b.status === "reading");
 
   if (!book) {
-    container.innerHTML = `<div class="reading-empty"><p>Nothing on the nightstand right now.</p></div>`;
+    container.innerHTML = '<div class="reading-empty"><p>Nothing on the nightstand right now.</p></div>';
     return;
   }
 
   const progress = book.progressPercent ?? 0;
   const blurb = book.description
-    ? `<p class="reading-blurb">${escapeHtml(truncate(book.description, 420))}</p>`
+    ? '<p class="reading-blurb">' + escapeHtml(truncate(book.description, 420)) + "</p>"
     : isAdmin
-    ? `<p class="reading-blurb reading-blurb-empty">No description yet — open this book's card and use "Reload from OpenLibrary" to fetch one.</p>`
+    ? '<p class="reading-blurb reading-blurb-empty">No description yet — open this book’s card and use "Reload from OpenLibrary" to fetch one.</p>'
     : "";
 
   const progressControl = isAdmin
-    ? `<input type="range" id="progress-slider" class="reading-progress-slider" min="0" max="100" value="${progress}"
-         style="--progress:${progress}%">`
-    : `<div class="reading-progress-track"><div class="reading-progress-fill" style="width:${progress}%"></div></div>`;
+    ? '<input type="range" id="progress-slider" class="reading-progress-slider" min="0" max="100" value="' + progress + '" style="--progress:' + progress + '%">'
+    : '<div class="reading-progress-track"><div class="reading-progress-fill" style="width:' + progress + '%"></div></div>';
 
-  container.innerHTML = `
-    <p class="kicker">Currently reading</p>
-    <div class="reading-cover-wrap" id="reading-cover-wrap" tabindex="0" role="button">
-      <img class="reading-cover" id="reading-cover-img" crossorigin="anonymous"
-           src="${resolveCoverUrl(book, "L")}" alt="Cover of ${escapeHtml(book.title)}">
-    </div>
-    ${book.series ? `<p class="reading-series">${escapeHtml(book.series)}${book.seriesPosition ? " · Book " + book.seriesPosition : ""}</p>` : ""}
-    <h1 class="reading-title">${escapeHtml(book.title)}</h1>
-    <p class="reading-author">by ${escapeHtml(book.author)}</p>
-    ${blurb}
-    <div class="reading-progress-row">
-      ${progressControl}
-      <div class="reading-progress-label">${progress}% through</div>
-    </div>
-    ${isAdmin ? `<button class="stamp-button-ghost" id="mark-finished-btn" style="margin-top:20px;">Mark as finished</button>` : ""}
-  `;
+  container.innerHTML =
+    '<div class="hero-grid">' +
+      '<div class="reading-cover-wrap" id="reading-cover-wrap" tabindex="0" role="button">' +
+        '<img class="reading-cover" id="reading-cover-img" src="' + resolveCoverUrl(book, "L") + '" alt="Cover of ' + escapeHtml(book.title) + '">' +
+      "</div>" +
+      '<div class="hero-info">' +
+        '<p class="kicker">Reading now</p>' +
+        (book.series ? '<p class="reading-series">' + escapeHtml(book.series) + (book.seriesPosition ? " · Book " + book.seriesPosition : "") + "</p>" : "") +
+        '<h1 class="reading-title">' + escapeHtml(book.title) + "</h1>" +
+        '<p class="reading-author">by ' + escapeHtml(book.author) + "</p>" +
+        blurb +
+        '<div class="reading-progress-row">' +
+          progressControl +
+          '<div class="reading-progress-label">' + progress + "% through</div>" +
+        "</div>" +
+        (isAdmin ? '<button class="stamp-button-ghost" id="mark-finished-btn" style="margin-top:20px;">Mark as finished</button>' : "") +
+      "</div>" +
+      '<div class="hero-ring" style="--pct:' + progress + '">' +
+        '<div class="hero-ring-inner">' +
+          '<span class="hero-ring-num">' + progress + "%</span>" +
+          '<span class="hero-ring-sub">complete</span>' +
+        "</div>" +
+      "</div>" +
+    "</div>";
 
   const coverWrap = document.getElementById("reading-cover-wrap");
   coverWrap.addEventListener("click", () => openBookCard(book.id));
   coverWrap.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") openBookCard(book.id);
   });
-  attachTiltEffect(coverWrap, { maxTilt: 6, lift: 4, scaleAmount: 1.015 });
-
-  const coverImg = document.getElementById("reading-cover-img");
-  if (coverImg.complete) sampleAmbientColor(coverImg);
-  else coverImg.addEventListener("load", () => sampleAmbientColor(coverImg));
+  attachTiltEffect(coverWrap);
 
   if (isAdmin) {
     const slider = document.getElementById("progress-slider");
     const label = container.querySelector(".reading-progress-label");
     slider.addEventListener("input", () => {
-      label.textContent = `${slider.value}% through`;
-      slider.style.setProperty("--progress", `${slider.value}%`);
+      label.textContent = slider.value + "% through";
+      slider.style.setProperty("--progress", slider.value + "%");
+      const ring = container.querySelector(".hero-ring");
+      if (ring) {
+        ring.style.setProperty("--pct", slider.value);
+        const num = ring.querySelector(".hero-ring-num");
+        if (num) num.textContent = slider.value + "%";
+      }
     });
     slider.addEventListener("change", () => {
       updateDoc(doc(db, "books", book.id), { progressPercent: parseInt(slider.value, 10) });
@@ -259,12 +206,11 @@ function renderCurrentlyReading() {
 
     document.getElementById("mark-finished-btn").addEventListener("click", async () => {
       await updateDoc(doc(db, "books", book.id), { status: "read", progressPercent: 100 });
-      showToast(`Marked "${book.title}" as finished — add a rating whenever you're ready.`);
+      showToast('Marked "' + book.title + '" as finished — add a rating whenever you\u2019re ready.');
       openBookCard(book.id);
     });
   }
 }
-
 
 // ------------------------------------------------------------
 // Panels 2 & 3 — Shelves
@@ -291,33 +237,58 @@ function sortBooks(books, mode, seriesAvg) {
   }
 }
 
+// Static (non-editable) star display for the finished-books grid.
+function starsHtml(rating) {
+  let html = '<span class="star-rating star-rating-static">';
+  for (let i = 0; i < 5; i++) {
+    const fillPct = Math.max(0, Math.min(1, rating - i)) * 100;
+    html += '<span class="star">' +
+      '<svg class="star-outline" viewBox="0 0 24 24"><path d="' + STAR_PATH + '"/></svg>' +
+      '<span class="star-fill" style="--fill:' + fillPct + '%">' +
+      '<svg class="star-fill-shape" viewBox="0 0 24 24"><path d="' + STAR_PATH + '"/></svg>' +
+      "</span></span>";
+  }
+  return html + "</span>";
+}
+
 function renderShelf(containerId, books, badgeType) {
   const container = document.getElementById(containerId);
   if (!books.length) {
-    container.innerHTML = `<p class="shelf-empty">Nothing here yet.</p>`;
+    container.innerHTML = '<p class="shelf-empty">Nothing here yet.</p>';
     return;
   }
+  container.classList.toggle("shelf-grid", badgeType === "rating");
+  container.classList.toggle("shelf-list", badgeType === "match");
   container.innerHTML = books
     .map((b) => {
-      const badge =
-        badgeType === "rating"
-          ? b.rating != null
-            ? `<div class="spine-badge badge-rating">${b.rating}</div>`
-            : ""
-          : `<div class="spine-badge badge-match">${b._match?.toFixed(1) ?? "–"}</div>`;
-      return `
-        <div class="cover-wrap">
-          <div class="book-cover-card" tabindex="0" role="button" data-id="${b.id}"
-               style="background-image:url('${resolveCoverUrl(b, "M")}'); border-left-color:${stripeColor(b.title)};">
-            ${badge}
-          </div>
-          <div class="cover-caption">${escapeHtml(b.title)}</div>
-          <div class="cover-author">${escapeHtml(b.author)}</div>
-        </div>`;
+      if (badgeType === "rating") {
+        const ratingHtml = b.rating != null
+          ? starsHtml(b.rating) + '<span class="rating-number">' + b.rating.toFixed(2).replace(/\.?0+$/, "") + "</span>"
+          : '<span class="unrated">Not yet rated</span>';
+        return '<div class="cover-wrap">' +
+          '<div class="book-cover-card" tabindex="0" role="button" data-id="' + b.id + '"' +
+          ' style="background-image:url(\'' + resolveCoverUrl(b, "M") + '\')"></div>' +
+          '<div class="cover-caption">' + escapeHtml(b.title) + "</div>" +
+          '<div class="cover-author">' + escapeHtml(b.author) + "</div>" +
+          '<div class="cover-rating">' + ratingHtml + "</div>" +
+        "</div>";
+      }
+      const score = b._match ?? null;
+      return '<div class="tbr-row" tabindex="0" role="button" data-id="' + b.id + '">' +
+        '<div class="tbr-cover" style="background-image:url(\'' + resolveCoverUrl(b, "M") + '\')"></div>' +
+        '<div class="tbr-meta">' +
+          '<div class="cover-caption">' + escapeHtml(b.title) + "</div>" +
+          '<div class="cover-author">' + escapeHtml(b.author) + "</div>" +
+        "</div>" +
+        '<div class="tbr-score">' +
+          '<div class="tbr-bar"><div class="tbr-bar-fill" style="width:' + (score ? score * 10 : 0) + '%"></div></div>' +
+          '<div class="tbr-num">' + (score != null ? score.toFixed(1) : "–") + "</div>" +
+        "</div>" +
+      "</div>";
     })
     .join("");
 
-  container.querySelectorAll(".book-cover-card").forEach((el) => {
+  container.querySelectorAll("[data-id]").forEach((el) => {
     el.addEventListener("click", () => openBookCard(el.dataset.id));
     el.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") openBookCard(el.dataset.id);
@@ -357,8 +328,7 @@ function openBookCard(id) {
 
   document.getElementById("bc-cover").src = resolveCoverUrl(book, "L");
   document.getElementById("bc-cover").alt = `Cover of ${book.title}`;
-  document.getElementById("bc-spine").style.background = stripeColor(book.title);
-  document.getElementById("bc-series").textContent = book.series
+    document.getElementById("bc-series").textContent = book.series
     ? `${book.series}${book.seriesPosition ? " · Book " + book.seriesPosition : ""}`
     : "";
   document.getElementById("bc-title").textContent = book.title;
@@ -528,61 +498,19 @@ function renderStarRating(container, rating, editable, onChange) {
 }
 
 // ------------------------------------------------------------
-// Swipe / panel navigation
+// Tab navigation — Finished / To read
 // ------------------------------------------------------------
-const track = document.getElementById("track");
-const dots = document.querySelectorAll(".nav-dot");
+const tabButtons = document.querySelectorAll(".tab-btn");
+const tabPanes = document.querySelectorAll(".tab-pane");
 
-function goToPanel(index) {
-  const newPanel = Math.max(0, Math.min(PANEL_COUNT - 1, index));
-  if (newPanel === currentPanel) return;
-
-  currentPanel = newPanel;
-  track.style.transform = `translateX(-${(100 / PANEL_COUNT) * currentPanel}%)`;
-  dots.forEach((d, i) => d.classList.toggle("is-active", i === currentPanel));
-  applyAmbient(currentPanel);
+function activateTab(name) {
+  tabButtons.forEach((b) => b.classList.toggle("is-active", b.dataset.tab === name));
+  tabPanes.forEach((p) => p.classList.toggle("is-active", p.dataset.pane === name));
 }
 
-document.getElementById("nav-prev").addEventListener("click", () => goToPanel(currentPanel - 1));
-document.getElementById("nav-next").addEventListener("click", () => goToPanel(currentPanel + 1));
-dots.forEach((d) => d.addEventListener("click", () => goToPanel(parseInt(d.dataset.goto, 10))));
-
-document.addEventListener("keydown", (e) => {
-  if (card && !card.hidden) return;
-  if (e.key === "ArrowLeft") goToPanel(currentPanel - 1);
-  if (e.key === "ArrowRight") goToPanel(currentPanel + 1);
+tabButtons.forEach((btn) => {
+  btn.addEventListener("click", () => activateTab(btn.dataset.tab));
 });
-
-// Touch swipe
-let touchStartX = null;
-let touchStartY = null;
-track.addEventListener("touchstart", (e) => {
-  touchStartX = e.touches[0].clientX;
-  touchStartY = e.touches[0].clientY;
-}, { passive: true });
-
-track.addEventListener("touchend", (e) => {
-  if (touchStartX === null) return;
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  const dy = e.changedTouches[0].clientY - touchStartY;
-  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
-    goToPanel(currentPanel + (dx < 0 ? 1 : -1));
-  }
-  touchStartX = null;
-}, { passive: true });
-
-// Trackpad horizontal wheel
-let wheelLock = false;
-track.addEventListener("wheel", (e) => {
-  if (Math.abs(e.deltaX) < Math.abs(e.deltaY)) return; // let vertical scroll happen inside a panel
-  if (wheelLock) return;
-  if (Math.abs(e.deltaX) > 30) {
-    wheelLock = true;
-    goToPanel(currentPanel + (e.deltaX > 0 ? 1 : -1));
-    setTimeout(() => (wheelLock = false), 500);
-  }
-}, { passive: true });
-
 // ------------------------------------------------------------
 // Admin: sign-in
 // ------------------------------------------------------------
