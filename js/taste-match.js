@@ -1,13 +1,15 @@
 // ============================================================
 // TASTE MATCH — scores a to-read book 0-10 against your rated library
 //
-// The score answers: "where would this book land among everything
-// you've read?" It is the share of your own rated books that the
-// predicted rating outranks (a mid-rank percentile), on 0-10:
-// ~9-10 = predicted to outdo nearly everything you've read,
-// ~5 = mid-shelf for you, ~0-1 = predicted dud. Because it is measured
-// against your own rating history, it self-normalizes for whether you
-// are a generous or a harsh rater and uses the full 0-10 range.
+// The score answers: "how far above or below YOUR average read is this
+// book predicted to land?", on 0-10. 5.0 = predicted to be exactly
+// your average book; +0.8 predicted stars over your mean = 10
+// (a can't-miss favorite); -0.8 stars = 0 (a predicted dud). The full
+// range is genuinely reachable because the mapping measures deviation
+// from your mean, which has no ceiling: a percentile-of-your-ratings
+// mapping was tried first, but damped predictions can never exceed the
+// top ratings you have already handed out, so a rater with many 5-star
+// books saw every candidate stuck below ~7.
 //
 // It predicts a star rating for the candidate from three evidence
 // signals, each centered on your mean rating and shrunk toward it
@@ -181,7 +183,7 @@ function tagCosine(candidateTags, taste) {
 /**
  * @param {{author:string, series?:string, seriesPosition?:number, tags?:string[]}} candidate
  * @param {Array<{author:string, series?:string, seriesPosition?:number, tags?:string[], rating:number}>} readBooks
- * @returns {number} score 0-10, one decimal; percentile of your own reading history
+ * @returns {number} score 0-10, one decimal; 5.0 = your average book, +/-0.8 predicted stars = full scale
  */
 export function computeMatchScore(candidate, readBooks) {
   const rated = (readBooks || []).filter((b) => toRating(b.rating) !== null);
@@ -233,18 +235,13 @@ export function computeMatchScore(candidate, readBooks) {
     ? signals.reduce((acc, s) => acc + s.pred * s.w, 0) / wTotal
     : userMean;
 
-  // Map the prediction onto 0-10 through YOUR OWN rating history: the
-  // score is the share of your rated books the prediction outranks
-  // (mid-rank percentile). This self-normalizes for rating generosity -
-  // a harsh rater's 3-star prediction and a generous rater's 4.5 can
-  // both land mid-scale - and it uses the FULL 0-10 range: a predicted
-  // favorite lands near 9-10, a typical read mid-scale, a dud near 0-1.
-  let below = 0;
-  let equal = 0;
-  for (const r of ratings) {
-    if (r < pred) below++;
-    else if (r === pred) equal++;
-  }
-  const percentile = (below + equal / 2) / ratings.length;
-  return Math.round(percentile * 100) / 10;
+  // Map the prediction onto the FULL 0-10 scale, centered on your
+  // mean: 5.0 = predicted to be exactly your average read, and 0.8 of
+  // a predicted star spans each half of the scale (+0.8 stars = 10,
+  // -0.8 stars = 0). Small predicted differences therefore spread
+  // across the whole range instead of bunching up: the +/-0.4-star
+  // band where most honest predictions live covers 2.5 -> 7.5, and
+  // genuinely strong (or dire) evidence pushes past those edges.
+  const score = 5 + (pred - userMean) * 6.25;
+  return Math.round(Math.min(Math.max(score, 0), 10) * 10) / 10;
 }
