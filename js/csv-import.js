@@ -3,7 +3,7 @@
 // GoodReads → My Books → Import/Export → Export Library
 // ============================================================
 import Papa from "https://esm.sh/papaparse@5.4.1";
-import { collection, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { collection, addDoc, serverTimestamp, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { db } from "./firebase-config.js";
 import { findBestMatch, getWorkDetails } from "./openlibrary.js";
 import { searchGoogleBooks } from "./googlebooks.js";
@@ -38,11 +38,26 @@ function extractTags(bookshelvesRaw) {
     .filter((s) => s && !["read", "to-read", "currently-reading"].includes(s));
 }
 
+// GoodReads exports dates like "2026/03/14" (sometimes with a time
+// suffix); "Number of Pages" is a plain number, quoted or not.
+function parseGoodreadsDate(raw) {
+  if (!raw) return null;
+  const t = Date.parse(String(raw).trim().replace(/\//g, "-"));
+  return Number.isFinite(t) ? t : null;
+}
+
+function parsePageCount(raw) {
+  const n = parseFloat(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+const libraryKey = (title, author) => (title + "|" + author).toLowerCase().trim();
+
 /**
  * @param {File} file
  * @param {(msg:string)=>void} onProgress
  */
-export function importGoodreadsCSV(file, onProgress = () => {}) {
+export function importGoodreadsCSV(file, onProgress = () => {}, existingBooks = []) {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
@@ -52,6 +67,10 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
           const rows = results.data;
           let imported = 0;
           let skipped = 0;
+          let refreshed = 0;
+          const existing = new Map(
+            existingBooks.map((b) => [libraryKey(b.title || "", b.author || ""), b])
+          );
 
           for (const [i, row] of rows.entries()) {
             const status = SHELF_STATUS_MAP[(row["Exclusive Shelf"] || "").trim()];
@@ -64,6 +83,25 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
             const { title, series, seriesPosition } = splitSeriesFromTitle(rawTitle);
             const author = (row["Author"] || "Unknown author").trim();
             const goodreadsRating = parseFloat(row["My Rating"]) || 0;
+            const dateRead = status === "read" ? parseGoodreadsDate(row["Date Read"]) : null;
+            const csvPageCount = parsePageCount(row["Number of Pages"]);
+
+            // Already in the library? Don't duplicate it — but backfill
+            // finish dates and page counts, which power the Year in
+            // Review and reading-velocity stats.
+            const existingBook = existing.get(libraryKey(title, author));
+            if (existingBook) {
+              const updates = {};
+              if (existingBook.readAt == null && dateRead !== null) updates.readAt = dateRead;
+              if (existingBook.pageCount == null && csvPageCount !== null) updates.pageCount = csvPageCount;
+              if (Object.keys(updates).length) {
+                await updateDoc(doc(db, "books", existingBook.id), updates);
+                refreshed++;
+              } else {
+                skipped++;
+              }
+              continue;
+            }
 
             onProgress(`(${i + 1}/${rows.length}) Looking up "${title}"…`);
 
@@ -105,6 +143,8 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
               seriesPosition: seriesPosition || null,
               status,
               rating: status === "read" && goodreadsRating > 0 ? goodreadsRating : null,
+              readAt: dateRead,
+              pageCount: csvPageCount,
               tags: subjects.length ? subjects.slice(0, 8) : extractTags(row["Bookshelves"]),
               description,
               coverId,
@@ -118,7 +158,7 @@ export function importGoodreadsCSV(file, onProgress = () => {}) {
             await sleep(120); // be polite to OpenLibrary's public API
           }
 
-          resolve({ imported, skipped, total: rows.length });
+          resolve({ imported, skipped, refreshed, total: rows.length });
         } catch (err) {
           reject(err);
         }
