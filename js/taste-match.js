@@ -1,15 +1,16 @@
 // ============================================================
-// TASTE MATCH — scores a to-read book 0-10 against your rated library
+// TASTE MATCH — scores a to-read book 0-5 against your rated library
 //
 // The score answers: "how far above or below YOUR average read is this
-// book predicted to land?", on 0-10. 5.0 = predicted to be exactly
-// your average book; +0.8 predicted stars over your mean = 10
-// (a can't-miss favorite); -0.8 stars = 0 (a predicted dud). The full
-// range is genuinely reachable because the mapping measures deviation
-// from your mean, which has no ceiling: a percentile-of-your-ratings
-// mapping was tried first, but damped predictions can never exceed the
-// top ratings you have already handed out, so a rater with many 5-star
-// books saw every candidate stuck below ~7.
+// book predicted to land?", on the same 0-5 scale as your star ratings.
+// 2.5 = predicted to be exactly your average book; +0.8 predicted stars
+// over your mean = 5.0 (a can't-miss favorite); -0.8 stars = 0 (a
+// predicted dud). The full range is genuinely reachable because the
+// mapping measures deviation from your mean, which has no ceiling: a
+// percentile-of-your-ratings mapping was tried first, but damped
+// predictions can never exceed the top ratings you have already handed
+// out, so a rater with many 5-star books saw every candidate bunched
+// near the top of the scale.
 //
 // It predicts a star rating for the candidate from three evidence
 // signals, each centered on your mean rating and shrunk toward it
@@ -177,17 +178,21 @@ function tagCosine(candidateTags, taste) {
 }
 
 // ------------------------------------------------------------
-// Main entry point
+// ------------------------------------------------------------
+// Main entry points
 // ------------------------------------------------------------
 
 /**
+ * Predicts the star rating (0-5) you are likely to give a candidate
+ * book, from author / series / tag affinity with your rated library.
+ *
  * @param {{author:string, series?:string, seriesPosition?:number, tags?:string[]}} candidate
  * @param {Array<{author:string, series?:string, seriesPosition?:number, tags?:string[], rating:number}>} readBooks
- * @returns {number} score 0-10, one decimal; 5.0 = your average book, +/-0.8 predicted stars = full scale
+ * @returns {{pred:number, userMean:number}|null} the predicted rating plus your mean rating; null on cold start
  */
-export function computeMatchScore(candidate, readBooks) {
+export function predictRating(candidate, readBooks) {
   const rated = (readBooks || []).filter((b) => toRating(b.rating) !== null);
-  if (!rated.length) return 5.0; // cold start: no taste data yet
+  if (!rated.length) return null; // cold start: no taste data yet
 
   const ratings = rated.map((b) => toRating(b.rating));
   const userMean = ratings.reduce((acc, r) => acc + r, 0) / ratings.length;
@@ -235,13 +240,21 @@ export function computeMatchScore(candidate, readBooks) {
     ? signals.reduce((acc, s) => acc + s.pred * s.w, 0) / wTotal
     : userMean;
 
-  // Map the prediction onto the FULL 0-10 scale, centered on your
-  // mean: 5.0 = predicted to be exactly your average read, and 0.8 of
-  // a predicted star spans each half of the scale (+0.8 stars = 10,
-  // -0.8 stars = 0). Small predicted differences therefore spread
-  // across the whole range instead of bunching up: the +/-0.4-star
-  // band where most honest predictions live covers 2.5 -> 7.5, and
-  // genuinely strong (or dire) evidence pushes past those edges.
-  const score = 5 + (pred - userMean) * 6.25;
-  return Math.round(Math.min(Math.max(score, 0), 10) * 10) / 10;
+
+  return { pred, userMean };
+}
+
+/**
+ * Display score for the to-read shelf: maps a predicted star rating
+ * onto the same 0-5 scale your ratings use, so "3.8" reads like a
+ * 3.8-star expectation. 2.5 = predicted to be exactly your average
+ * read; +0.8 predicted stars over your mean = 5.0; -0.8 stars = 0.
+ * Small predicted differences therefore spread across the whole range
+ * instead of bunching up in the middle.
+ */
+export function computeMatchScore(candidate, readBooks) {
+  const p = predictRating(candidate, readBooks);
+  if (!p) return 2.5; // cold start: dead centre of the scale
+  const score = 2.5 + (p.pred - p.userMean) * 3.125;
+  return Math.round(Math.min(Math.max(score, 0), 5) * 10) / 10;
 }

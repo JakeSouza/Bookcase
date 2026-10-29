@@ -499,3 +499,27 @@ img { max-width: 100%; }
   .tbr-bar { width: 60px; }
 }
 
+/* Page-number progress + reading velocity */
+.reading-pages-controls { display: flex; align-items: flex-end; gap: 10px; }
+.pages-field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; font-weight: 600; color: var(--paper-dim); text-transform: uppercase; letter-spacing: .07em; }
+.pages-field input { width: 92px; padding: 7px 8px; background: var(--ink); color: var(--paper); border: 1px solid var(--brass); border-radius: 6px; font-size: 14px; font-variant-numeric: tabular-nums; }
+.pages-of { font-size: 12px; color: var(--paper-dim); padding-bottom: 9px; }
+.reading-velocity { margin-top: 10px; font-size: 12.5px; color: var(--paper-dim); }
+.reading-velocity strong { color: var(--paper); }
+
+/* Multi-axis ratings + calibration readout in the book card */
+.bc-axes-wrap { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+.bc-axes-wrap:empty { display: none; }
+.bc-axis-row { display: flex; align-items: center; gap: 12px; }
+.bc-axis-name { width: 86px; flex: none; font-size: 11px; font-weight: 600; color: var(--paper-dim); text-transform: uppercase; letter-spacing: .07em; }
+.bc-calibration { margin: 8px 0 0; font-size: 12.5px; color: var(--paper-dim); }
+
+/* Year in review */
+.year-review { min-height: 120px; }
+.yr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 16px 0; }
+.yr-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(15, 23, 42, .05); }
+.yr-note { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--paper-dim); }
+.yr-best { margin: 18px 0 0; font-size: 15px; color: var(--paper); }
+.yr-best strong { font-weight: 800; }
+.yr-hint { margin: 18px 0 0; font-size: 13px; color: var(--paper-dim); line-height: 1.6; }
+@media (max-width: 640px) { .bc-axis-name { width: 72px; } }

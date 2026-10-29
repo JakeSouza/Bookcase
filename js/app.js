@@ -1,6 +1,6 @@
 import { db, auth } from "./firebase-config.js";
 import {
-  collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp
+  collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, arrayUnion
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import {
   onAuthStateChanged, signInWithEmailAndPassword, signOut
@@ -8,7 +8,7 @@ import {
 import { searchBooks, coverUrl, fetchWorkById, getWorkDetails } from "./openlibrary.js";
 import { searchGoogleBooks, fetchGoogleBookById } from "./googlebooks.js";
 import { mergeTags } from "./tag-utils.js";
-import { computeMatchScore } from "./taste-match.js";
+import { computeMatchScore, predictRating } from "./taste-match.js";
 import { importGoodreadsCSV } from "./csv-import.js";
 
 // ------------------------------------------------------------
@@ -56,6 +56,60 @@ function truncate(str, max) {
   if (clean.length <= max) return clean;
   return clean.slice(0, max).replace(/\s+\S*$/, "") + "…";
 }
+
+// Progress is tracked in PAGES (pagesRead / pageCount) — the percentage
+// is computed, never stored. Books from before this change (or with only
+// a legacy percentage) fall back to progressPercent.
+function bookProgress(book) {
+  const pageCount = toNum(book.pageCount);
+  const pagesRead = toNum(book.pagesRead);
+  if (pageCount && pagesRead !== null) {
+    return Math.max(0, Math.min(100, Math.round((pagesRead / pageCount) * 100)));
+  }
+  const pct = toNum(book.progressPercent);
+  return pct !== null ? Math.max(0, Math.min(100, Math.round(pct))) : 0;
+}
+
+// Reading velocity from the progress log: pages/day between the first
+// and last logged check-ins. Needs at least two points at least half a
+// day apart to mean anything.
+function readingVelocity(book) {
+  const log = Array.isArray(book.progressLog) ? [...book.progressLog].sort((a, b) => a.t - b.t) : [];
+  if (log.length < 2) return null;
+  const first = log[0];
+  const last = log[log.length - 1];
+  const days = (last.t - first.t) / 86400000;
+  if (days < 0.5) return null;
+  const pages = (toNum(last.p) ?? 0) - (toNum(first.p) ?? 0);
+  if (pages <= 0) return null;
+  return { pagesPerDay: pages / days, lastT: last.t };
+}
+
+// Friendly label for when the current book should be finished, given
+// the recent reading pace.
+function predictedFinishLabel(book, velocity) {
+  const pageCount = toNum(book.pageCount);
+  const pagesRead = toNum(book.pagesRead) ?? 0;
+  if (!pageCount || pagesRead >= pageCount) return "soon";
+  const daysLeft = (pageCount - pagesRead) / velocity.pagesPerDay;
+  if (daysLeft > 365) return "someday, at this pace";
+  const d = new Date(velocity.lastT + daysLeft * 86400000);
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+// Snapshot the taste model's predicted star rating for a book. Taken
+// the moment a book goes live (started, finished or first rated) so the
+// Year in Review can grade the recommender against reality later.
+function predictForBook(book) {
+  const p = predictRating(
+    book,
+    allBooks.filter((b) => b.status === "read" && toNum(b.rating) !== null && b.id !== book.id)
+  );
+  return p ? Math.round(p.pred * 100) / 100 : null;
+}
+
+// Multi-axis ratings: the dimensions a single star score can't capture.
+const AXES = [["plot", "Plot"], ["characters", "Characters"], ["prose", "Prose"], ["pacing", "Pacing"], ["world", "World"]];
 
 // Google Books (and sometimes OpenLibrary) descriptions arrive as HTML
 // snippets (<b>, <i>, <br>, <p>). Instead of printing those tags as literal
@@ -193,7 +247,7 @@ function renderStats() {
   const sub = document.getElementById("greeting-sub");
   if (sub) {
     if (reading) {
-      const pct = toNum(reading.progressPercent) ?? 0;
+      const pct = bookProgress(reading);
       sub.textContent = pct >= 100
         ? "Almost done with \u201C" + reading.title + "\u201D\u2014 mark it finished to rate it."
         : "You\u2019re " + pct + "% into \u201C" + reading.title + "\u201D.";
@@ -211,6 +265,7 @@ function renderAll() {
     ["currently reading", renderCurrentlyReading],
     ["read shelf", renderReadShelf],
     ["to-read shelf", renderTbrShelf],
+    ["year in review", renderYearReview],
   ];
   for (const [name, render] of sections) {
     try {
@@ -242,7 +297,10 @@ function renderCurrentlyReading() {
     return;
   }
 
-  const progress = toNum(book.progressPercent) ?? 0;
+  const progress = bookProgress(book);
+  const pageCount = toNum(book.pageCount);
+  const pagesRead = toNum(book.pagesRead);
+  const velocity = readingVelocity(book);
   const blurb = book.description
     ? '<div class="reading-blurb">' + descriptionToHtml(book.description, 420, { flow: true }) + "</div>"
     : isAdmin
@@ -250,7 +308,11 @@ function renderCurrentlyReading() {
     : "";
 
   const progressControl = isAdmin
-    ? '<input type="range" id="progress-slider" class="reading-progress-slider" min="0" max="100" value="' + progress + '" style="--progress:' + progress + '%">'
+    ? '<div class="reading-pages-controls">' +
+        '<label class="pages-field">Pages read<input type="number" id="pages-read-input" min="0" step="1" value="' + (pagesRead ?? 0) + '"></label>' +
+        '<span class="pages-of">of</span>' +
+        '<label class="pages-field">Total pages<input type="number" id="page-count-input" min="0" step="1" value="' + (pageCount ?? "") + '" placeholder="—"></label>' +
+      "</div>"
     : '<div class="reading-progress-track"><div class="reading-progress-fill" style="width:' + progress + '%"></div></div>';
 
   container.innerHTML =
@@ -266,8 +328,11 @@ function renderCurrentlyReading() {
         blurb +
         '<div class="reading-progress-row">' +
           progressControl +
-          '<div class="reading-progress-label">' + progress + "% through</div>" +
+          '<div class="reading-progress-label">' + progress + "% through" + (pageCount ? " · page " + (pagesRead ?? 0) + " of " + pageCount : "") + "</div>" +
         "</div>" +
+        (velocity
+          ? '<div class="reading-velocity">Pace: about <strong>' + Math.round(velocity.pagesPerDay) + " pages a day</strong> — on track to finish around " + predictedFinishLabel(book, velocity) + ".</div>"
+          : "") +
         (isAdmin ? '<button class="stamp-button-ghost" id="mark-finished-btn" style="margin-top:20px;">Mark as finished</button>' : "") +
       "</div>" +
       '<div class="hero-ring" style="--pct:' + progress + '">' +
@@ -285,20 +350,40 @@ function renderCurrentlyReading() {
   });
 
   if (isAdmin) {
-    const slider = document.getElementById("progress-slider");
+    const pagesInput = document.getElementById("pages-read-input");
+    const countInput = document.getElementById("page-count-input");
     const label = container.querySelector(".reading-progress-label");
-    slider.addEventListener("input", () => {
-      label.textContent = slider.value + "% through";
-      slider.style.setProperty("--progress", slider.value + "%");
+    const updateLive = () => {
+      const total = parseInt(countInput.value, 10);
+      const read = parseInt(pagesInput.value, 10) || 0;
+      const pct = total > 0 ? Math.max(0, Math.min(100, Math.round((read / total) * 100))) : 0;
+      label.textContent = total > 0 ? pct + "% through · page " + read + " of " + total : read + " pages in";
       const ring = container.querySelector(".hero-ring");
       if (ring) {
-        ring.style.setProperty("--pct", slider.value);
+        ring.style.setProperty("--pct", String(pct));
         const num = ring.querySelector(".hero-ring-num");
-        if (num) num.textContent = slider.value + "%";
+        if (num) num.textContent = pct + "%";
       }
+    };
+    pagesInput.addEventListener("input", updateLive);
+    countInput.addEventListener("input", updateLive);
+    countInput.addEventListener("change", () => {
+      const total = parseInt(countInput.value, 10);
+      updateDoc(doc(db, "books", book.id), { pageCount: Number.isFinite(total) && total > 0 ? total : null })
+        .catch((err) => {
+          console.error("Failed to save page count:", err);
+          showToast("Couldn’t save the page count — check your connection and try again.");
+        });
     });
-    slider.addEventListener("change", () => {
-      updateDoc(doc(db, "books", book.id), { progressPercent: parseInt(slider.value, 10) })
+    pagesInput.addEventListener("change", () => {
+      const read = parseInt(pagesInput.value, 10);
+      if (!Number.isFinite(read) || read < 0) return;
+      // Every saved check-in lands in the progress log — that's what
+      // feeds the reading-velocity stats.
+      updateDoc(doc(db, "books", book.id), {
+        pagesRead: read,
+        progressLog: arrayUnion({ t: Date.now(), p: read })
+      })
         .catch((err) => {
           console.error("Failed to save progress:", err);
           showToast("Couldn’t save your progress — check your connection and try again.");
@@ -307,7 +392,16 @@ function renderCurrentlyReading() {
 
     document.getElementById("mark-finished-btn").addEventListener("click", async () => {
       try {
-        await updateDoc(doc(db, "books", book.id), { status: "read", progressPercent: 100 });
+        const finishUpdates = {
+          status: "read",
+          progressPercent: 100,
+          readAt: book.readAt ?? Date.now()
+        };
+        if (book.predictedStars == null) {
+          const pred = predictForBook(book);
+          if (pred !== null) finishUpdates.predictedStars = pred;
+        }
+        await updateDoc(doc(db, "books", book.id), finishUpdates);
         showToast('Marked "' + book.title + '" as finished — add a rating whenever you\u2019re ready.');
         openBookCard(book.id);
       } catch (err) {
@@ -388,7 +482,7 @@ function renderShelf(containerId, books, badgeType) {
           '<div class="cover-author">' + escapeHtml(b.author) + "</div>" +
         "</div>" +
         '<div class="tbr-score">' +
-          '<div class="tbr-bar"><div class="tbr-bar-fill" style="width:' + (score !== null ? score * 10 : 0) + '%"></div></div>' +
+          '<div class="tbr-bar"><div class="tbr-bar-fill" style="width:' + (score !== null ? score * 20 : 0) + '%"></div></div>' +
           '<div class="tbr-num">' + (score !== null ? score.toFixed(1) : "–") + "</div>" +
         "</div>" +
       "</div>";
@@ -411,6 +505,74 @@ function renderTbrShelf() {
   const withScores = tbr.map((b) => ({ ...b, _match: computeMatchScore(b, read) }));
   const mode = document.getElementById("tbr-sort").value;
   renderShelf("tbr-shelf", sortBooks(withScores, mode, avg), "match");
+}
+
+// ------------------------------------------------------------
+// Year in review — the reading year in wrap-up form: totals,
+// favourites, and a report card for the taste model's predictions.
+// ------------------------------------------------------------
+function renderYearReview() {
+  const container = document.getElementById("year-review");
+  if (!container) return;
+  const year = new Date().getFullYear();
+  const read = allBooks.filter((b) => b.status === "read");
+  const dated = read.filter((b) => {
+    const t = toNum(b.readAt);
+    return t !== null && new Date(t).getFullYear() === year;
+  });
+  const rated = dated.map((b) => toNum(b.rating)).filter((r) => r !== null);
+  const avg = rated.length ? rated.reduce((a, r) => a + r, 0) / rated.length : null;
+  const pages = dated.reduce((acc, b) => acc + (toNum(b.pageCount) ?? 0), 0);
+  const authors = new Set(dated.map((b) => b.author)).size;
+  const best = dated
+    .filter((b) => toNum(b.rating) !== null)
+    .sort((a, b) => toNum(a.rating) - toNum(b.rating))
+    .pop();
+
+  // Calibration: every book that carries both a snapshotted prediction
+  // and a real rating grades the recommender.
+  const calib = read
+    .map((b) => ({ p: toNum(b.predictedStars), a: toNum(b.rating) }))
+    .filter((c) => c.p !== null && c.a !== null);
+  let calibCard;
+  if (calib.length) {
+    const mae = calib.reduce((acc, c) => acc + Math.abs(c.a - c.p), 0) / calib.length;
+    const bias = calib.reduce((acc, c) => acc + (c.a - c.p), 0) / calib.length;
+    const trend = bias > 0.1
+      ? "The model tends to underrate you by " + bias.toFixed(2) + "★ a book."
+      : bias < -0.1
+      ? "The model tends to overrate you by " + Math.abs(bias).toFixed(2) + "★ a book."
+      : "Well calibrated — predictions are landing close to your real ratings.";
+    calibCard = '<div class="yr-card"><div class="stat-label">Prediction accuracy</div>' +
+      '<div class="stat-value">' + mae.toFixed(2) + '★</div>' +
+      '<div class="yr-note">average miss on ' + calib.length + " predicted book" + (calib.length === 1 ? "" : "s") + ". " + trend + "</div></div>";
+  } else {
+    calibCard = '<div class="yr-card"><div class="stat-label">Prediction accuracy</div>' +
+      '<div class="stat-value">–</div>' +
+      '<div class="yr-note">The taste model snapshots its predicted rating whenever you start or rate a book — its report card shows up here once you’ve rated a couple.</div></div>';
+  }
+
+  const card = (label, value) =>
+    '<div class="yr-card"><div class="stat-label">' + label + '</div><div class="stat-value">' + value + "</div></div>";
+
+  container.innerHTML =
+    '<div class="shelf-head"><h2 class="shelf-title">' + year + " in review</h2></div>" +
+    '<div class="yr-grid">' +
+      card("Books finished", String(dated.length)) +
+      card("Pages read", pages ? pages.toLocaleString() : "–") +
+      card("Average rating", avg !== null ? avg.toFixed(2).replace(/\.?0+$/, "") + "★" : "–") +
+      card("Authors", String(authors)) +
+      calibCard +
+    "</div>" +
+    (best
+      ? '<div class="yr-best">Book of the year so far: <strong>' + escapeHtml(best.title) + "</strong> by " + escapeHtml(best.author) + " — " + toNum(best.rating).toFixed(2).replace(/\.?0+$/, "") + "★</div>"
+      : "") +
+    (read.length && !dated.length
+      ? '<div class="yr-hint">None of your finished books have a finish date for ' + year + " yet. Dates are captured automatically when you mark a book finished — or re-import your GoodReads export, which now backfills dates onto books already in the library.</div>"
+      : "") +
+    (!read.length
+      ? '<div class="yr-hint">Finish a book and this panel fills up with your year: books, pages, ratings, and how well the taste model predicted you.</div>'
+      : "");
 }
 
 document.getElementById("read-sort").addEventListener("change", renderReadShelf);
@@ -462,17 +624,59 @@ function openBookCard(id) {
       book,
       allBooks.filter((b) => b.status === "read" && toNum(b.rating) !== null)
     );
-    ratingWrap.innerHTML = `<div class="bc-match-score">${score.toFixed(1)}<span style="font-size:1rem;color:var(--paper-dim)">/10</span></div><div class="bc-match-label">match to your taste</div>`;
+    document.getElementById("bc-axes-wrap").innerHTML = "";
+    ratingWrap.innerHTML = `<div class="bc-match-score">${score.toFixed(1)}<span style="font-size:1rem;color:var(--paper-dim)">/5</span></div><div class="bc-match-label">predicted match to your taste</div>`;
   } else {
     ratingWrap.innerHTML = "";
     const rating = toNum(book.rating) ?? 0;
     renderStarRating(ratingWrap, rating, isAdmin, (newRating) => {
-      updateDoc(doc(db, "books", book.id), { rating: newRating })
+      const updates = { rating: newRating };
+      // Freeze the model's prediction alongside the first real rating,
+      // so the Year in Review can grade the recommender later.
+      if (book.predictedStars == null) {
+        const pred = predictForBook(book);
+        if (pred !== null) updates.predictedStars = pred;
+      }
+      updateDoc(doc(db, "books", book.id), updates)
         .catch((err) => {
           console.error("Failed to save rating:", err);
           showToast("Couldn’t save that rating — check your connection and try again.");
         });
     });
+
+    // Calibration readout: how did the prediction do against reality?
+    const predicted = toNum(book.predictedStars);
+    if (predicted !== null && rating > 0) {
+      const diff = rating - predicted;
+      const verdict = Math.abs(diff) < 0.25
+        ? "nailed it"
+        : diff > 0 ? "you liked it more than predicted" : "you liked it less than predicted";
+      const calibEl = document.createElement("p");
+      calibEl.className = "bc-calibration";
+      calibEl.textContent = "Predicted " + predicted.toFixed(1) + "★ → rated " + rating.toFixed(2).replace(/\.?0+$/, "") + "★ — " + verdict;
+      ratingWrap.appendChild(calibEl);
+    }
+
+    // Multi-axis ratings: plot, characters, prose, pacing, world.
+    const axesWrap = document.getElementById("bc-axes-wrap");
+    axesWrap.innerHTML = "";
+    for (const [key, label] of AXES) {
+      const row = document.createElement("div");
+      row.className = "bc-axis-row";
+      const name = document.createElement("span");
+      name.className = "bc-axis-name";
+      name.textContent = label;
+      row.appendChild(name);
+      const axisVal = toNum(book.axes?.[key]) ?? 0;
+      renderStarRating(row, axisVal, isAdmin, (newVal) => {
+        updateDoc(doc(db, "books", book.id), { ["axes." + key]: newVal })
+          .catch((err) => {
+            console.error("Failed to save axis rating:", err);
+            showToast("Couldn’t save that rating — check your connection and try again.");
+          });
+      });
+      axesWrap.appendChild(row);
+    }
   }
 
   const adminActions = document.getElementById("bc-admin-actions");
@@ -505,7 +709,14 @@ function openBookCard(id) {
       <button class="stamp-button stamp-button-ghost" id="bc-delete" style="margin-top:12px;">Remove from library</button>
     `;
     document.getElementById("bc-status-select").addEventListener("change", (e) => {
-      updateDoc(doc(db, "books", book.id), { status: e.target.value }).catch((err) => {
+      const updates = { status: e.target.value };
+      if (e.target.value === "read") updates.readAt = book.readAt ?? Date.now();
+      // Freeze the model's prediction the moment a book goes live.
+      if ((e.target.value === "reading" || e.target.value === "read") && book.predictedStars == null) {
+        const pred = predictForBook(book);
+        if (pred !== null) updates.predictedStars = pred;
+      }
+      updateDoc(doc(db, "books", book.id), updates).catch((err) => {
         console.error("Failed to change status:", err);
         showToast("Couldn’t change the status — check your connection and try again.");
       });
@@ -554,6 +765,7 @@ function openBookCard(id) {
         if (gbook.categories?.length) updates.tags = mergeTags(book.tags || [], gbook.categories);
         if (gbook.description) updates.description = gbook.description;
         if (gbook.coverUrl && !book.coverId) updates.googleCoverUrl = gbook.coverUrl;
+        if (gbook.pageCount && !book.pageCount) updates.pageCount = gbook.pageCount;
 
         if (!Object.keys(updates).length) {
           statusEl.textContent = "Found a match, but it had nothing new to add.";
@@ -746,8 +958,9 @@ document.getElementById("add-search").addEventListener("click", async () => {
           if (details?.subjects?.length) tags = details.subjects.slice(0, 8);
           if (details?.description) description = details.description;
         }
+        let gbook = null;
         try {
-          const gbook = await searchGoogleBooks(r.title, r.author);
+          gbook = await searchGoogleBooks(r.title, r.author);
           if (gbook) {
             tags = mergeTags(tags, gbook.categories);
             if (!description && gbook.description) description = gbook.description;
@@ -768,6 +981,7 @@ document.getElementById("add-search").addEventListener("click", async () => {
             description,
             coverId: r.coverId,
             googleCoverUrl,
+            pageCount: gbook?.pageCount ?? null,
             workKey: r.workKey,
             source: "manual",
             createdAt: serverTimestamp()
@@ -795,10 +1009,14 @@ document.getElementById("csv-import-btn").addEventListener("click", async () => 
     return;
   }
   try {
-    const result = await importGoodreadsCSV(fileInput.files[0], (msg) => {
-      statusEl.textContent = msg;
-    });
-    statusEl.textContent = `Done — imported ${result.imported} of ${result.total} rows (${result.skipped} skipped).`;
+    const result = await importGoodreadsCSV(
+      fileInput.files[0],
+      (msg) => {
+        statusEl.textContent = msg;
+      },
+      allBooks
+    );
+    statusEl.textContent = `Done — imported ${result.imported}, refreshed ${result.refreshed}, skipped ${result.skipped} of ${result.total} rows.`;
   } catch (err) {
     statusEl.textContent = "Import failed: " + err.message;
   }
@@ -832,6 +1050,7 @@ document.getElementById("backfill-btn").addEventListener("click", async (e) => {
         if (gbook.categories?.length) updates.tags = mergeTags(book.tags || [], gbook.categories);
         if (!book.description && gbook.description) updates.description = gbook.description;
         if (!book.coverId && !book.googleCoverUrl && gbook.coverUrl) updates.googleCoverUrl = gbook.coverUrl;
+        if (!book.pageCount && gbook.pageCount) updates.pageCount = gbook.pageCount;
         enriched++;
       }
     } catch (err) {

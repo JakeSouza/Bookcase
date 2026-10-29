@@ -50,6 +50,7 @@ export async function searchGoogleBooks(title, author = "") {
     description: info.description || null,
     categories: parseCategories(info.categories),
     coverUrl: extractCoverUrl(info.imageLinks),
+    pageCount: info.pageCount ?? null,
     averageRating: info.averageRating ?? null,
     ratingsCount: info.ratingsCount ?? null
   };
@@ -97,6 +98,7 @@ export async function fetchGoogleBookById(rawId) {
     description: info.description || null,
     categories: parseCategories(info.categories),
     coverUrl: extractCoverUrl(info.imageLinks),
+    pageCount: info.pageCount ?? null,
     averageRating: info.averageRating ?? null,
     ratingsCount: info.ratingsCount ?? null
   };

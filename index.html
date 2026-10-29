@@ -37,6 +37,7 @@
   <nav class="tabs" role="tablist" aria-label="Library sections">
     <button class="tab-btn is-active" data-tab="shelf" type="button" role="tab" aria-selected="true">Finished · <span data-count="finished">0</span></button>
     <button class="tab-btn" data-tab="tbr" type="button" role="tab" aria-selected="false">To read · <span data-count="queue">0</span></button>
+    <button class="tab-btn" data-tab="review" type="button" role="tab" aria-selected="false">Year in review</button>
   </nav>
   <section class="tab-pane is-active" data-pane="shelf" role="tabpanel" aria-label="Books you’ve read">
     <div class="shelf-head">
@@ -68,6 +69,9 @@
     </div>
     <div id="tbr-shelf" class="shelf-list"></div>
   </section>
+  <section class="tab-pane" data-pane="review" role="tabpanel" aria-label="Your reading year in review">
+    <div id="year-review" class="year-review"></div>
+  </section>
 </main>
 <div id="book-card" class="book-card" hidden>
   <div class="book-card-inner">
@@ -79,6 +83,7 @@
       <p id="bc-author" class="bc-author"></p>
       <div id="bc-tags" class="bc-tags"></div>
       <div id="bc-rating-wrap" class="bc-rating-wrap"></div>
+      <div id="bc-axes-wrap" class="bc-axes-wrap"></div>
       <div id="bc-admin-actions" class="bc-admin-actions" hidden></div>
     </div>
   </div>
