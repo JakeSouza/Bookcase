@@ -37,6 +37,14 @@
 //   - Fuzzy matching: authors and series are compared after stripping
 //     "(Goodreads Author)" decoration, initials, "series"/"the" noise,
 //     so cross-source variants of the same name still match.
+//   - Queue-relative calibration: shrinkage keeps every signal close
+//     to your mean, so raw deviations are tiny and the fixed ±0.8-star
+//     mapping left most shelves bunched between 2.5 and 4. The shelf
+//     scorer normalizes deviations against the median/MAD spread of
+//     the current queue, stretching them across the full 0-5 range,
+//     with a smaller absolute-quality term so an all-favorites queue
+//     isn't re-centered downward. Monotonic in the raw prediction
+//     — the ranking never changes, only the display distribution.
 // ============================================================
 
 const BASE_WEIGHTS = { author: 0.35, series: 0.25, tags: 0.40 };
@@ -257,4 +265,67 @@ export function computeMatchScore(candidate, readBooks) {
   if (!p) return 2.5; // cold start: dead centre of the scale
   const score = 2.5 + (p.pred - p.userMean) * 3.125;
   return Math.round(Math.min(Math.max(score, 0), 5) * 10) / 10;
+}
+
+/**
+ * Display scores for the whole to-read queue at once (shelf view).
+ *
+ * Shrinkage keeps every signal close to your mean rating, so raw
+ * predicted-star deviations are intrinsically tiny — with the fixed
+ * mapping in computeMatchScore(), a typical queue bunched between 2.5
+ * and 4 and wasted most of the scale's resolution. This layer
+ * calibrates the queue against itself:
+ *
+ *   1. dev_i = predicted stars minus your mean (0 with no evidence)
+ *   2. robust z-score of dev across the queue (median + MAD)
+ *   3. score = clamp(2.5 + 1.4 * z + 0.55 * dev, 0, 5), rounded to 0.1
+ *
+ * The z-term stretches the queue's own spread across the full range
+ * ("where does this book sit among the ones you're considering?"),
+ * while the smaller absolute term keeps genuine quality signal ("is
+ * it above my average read at all?") so an all-favorites queue isn't
+ * re-centered downward. The MAD floor (0.2) keeps a near-identical
+ * queue from manufacturing separation out of rounding noise.
+ *
+ * Strictly monotonic in the raw deviation: the ranking is identical to
+ * sorting by raw predictions — only the display distribution changes.
+ *
+ * @param {Array} candidates the whole to-read queue
+ * @param {Array} readBooks your rated library
+ * @returns {number[]} one 0-5 score per candidate, aligned with input order
+ */
+export function computeMatchScores(candidates, readBooks) {
+  const books = candidates || [];
+  if (!books.length) return [];
+  const rated = (readBooks || []).filter((b) => toRating(b.rating) !== null);
+  if (!rated.length) return books.map(() => 2.5); // cold start: dead centre
+
+  const devs = books.map((c) => {
+    const p = predictRating(c, rated);
+    return p ? p.pred - p.userMean : 0;
+  });
+
+  // Too few books to speak of a distribution — keep the fixed mapping.
+  if (devs.length < 3) {
+    return devs.map((d) => round1(clamp05(2.5 + d * 3.125)));
+  }
+
+  const median = medianOf(devs);
+  const scale = Math.max(1.4826 * medianOf(devs.map((d) => Math.abs(d - median))), 0.2);
+
+  return devs.map((d) => round1(clamp05(2.5 + 1.4 * ((d - median) / scale) + 0.55 * d)));
+}
+
+function medianOf(xs) {
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+function clamp05(x) {
+  return Math.min(Math.max(x, 0), 5);
+}
+
+function round1(x) {
+  return Math.round(x * 10) / 10;
 }
