@@ -15,7 +15,7 @@ export async function searchBooks(title, author = "", limit = 5) {
   const params = new URLSearchParams({
     title,
     limit: String(limit),
-    fields: "key,title,author_name,cover_i,first_publish_year,subject,series"
+    fields: "key,title,author_name,cover_i,first_publish_year,subject,series,number_of_pages_median"
   });
   if (author) params.set("author", author);
 
@@ -30,7 +30,10 @@ export async function searchBooks(title, author = "", limit = 5) {
     coverId: doc.cover_i || null,
     firstPublishYear: doc.first_publish_year || null,
     subjects: (doc.subject || []).slice(0, 12),
-    series: (doc.series && doc.series[0]) || null
+    series: (doc.series && doc.series[0]) || null,
+    // Median page count across the work's editions — stored on the
+    // book when Google Books doesn't provide one.
+    pages: doc.number_of_pages_median || null
   }));
 }
 
@@ -85,6 +88,7 @@ async function fetchFromWork(workKey) {
     author: await resolveAuthorName(data.authors),
     coverId: (data.covers && data.covers[0]) || null,
     subjects: (data.subjects || []).slice(0, 12),
+    pages: data.number_of_pages ?? null,
     description: extractDescription(data.description)
   };
 }
@@ -122,6 +126,8 @@ async function fetchFromEdition(editionOlid) {
     author: authorName,
     coverId: (edition.covers && edition.covers[0]) || null,
     subjects,
+    // Editions carry the exact page count for that printing.
+    pages: edition.number_of_pages ?? null,
     description
   };
 }

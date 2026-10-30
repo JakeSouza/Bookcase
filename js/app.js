@@ -111,6 +111,42 @@ function predictForBook(book) {
 // Multi-axis ratings: the dimensions a single star score can't capture.
 const AXES = [["plot", "Plot"], ["characters", "Characters"], ["prose", "Prose"], ["pacing", "Pacing"], ["world", "World"]];
 
+// One quiet page-count lookup per book per session: when the librarian
+// opens a book that has no page count yet, ask Google Books first, then
+// OpenLibrary, and store whatever comes back. The "Total pages" field
+// then fills itself in instead of waiting for a manual entry.
+const pageCountLookups = new Set();
+function maybeBackfillPageCount(book) {
+  if (!isAdmin || toNum(book.pageCount) !== null || pageCountLookups.has(book.id)) return;
+  pageCountLookups.add(book.id);
+  (async () => {
+    let pages = null;
+    try {
+      const gbook = await searchGoogleBooks(book.title, book.author);
+      if (gbook && gbook.pageCount) pages = gbook.pageCount;
+    } catch (err) {
+      console.error("Page count lookup (Google Books) failed:", err);
+    }
+    if (!pages) {
+      // OpenLibrary's search endpoint reports the median page count
+      // across a work's editions — a good fallback when Google Books
+      // has no match (or its anonymous quota is exhausted).
+      try {
+        const olMatch = (await searchBooks(book.title, book.author, 1))[0];
+        if (olMatch && olMatch.pages) pages = olMatch.pages;
+      } catch (err) {
+        console.error("Page count lookup (OpenLibrary) failed:", err);
+      }
+    }
+    if (pages) {
+      updateDoc(doc(db, "books", book.id), { pageCount: pages })
+        .catch((err) => console.error("Failed to save page count:", err));
+    }
+    // No retry this session — a failed lookup stays failed until the
+    // page reloads, so a spotty API can't turn re-renders into a loop.
+  })();
+}
+
 // Google Books (and sometimes OpenLibrary) descriptions arrive as HTML
 // snippets (<b>, <i>, <br>, <p>). Instead of printing those tags as literal
 // text, render the safe subset as real formatting. Everything outside the
@@ -301,6 +337,7 @@ function renderCurrentlyReading() {
   const pageCount = toNum(book.pageCount);
   const pagesRead = toNum(book.pagesRead);
   const velocity = readingVelocity(book);
+  maybeBackfillPageCount(book);
   const blurb = book.description
     ? '<div class="reading-blurb">' + descriptionToHtml(book.description, 420, { flow: true }) + "</div>"
     : isAdmin
@@ -605,6 +642,10 @@ function openBookCard(id) {
   const book = allBooks.find((b) => b.id === id);
   if (!book) return;
 
+  // Quietly look up the page count if it's missing — the hero's
+  // "Total pages" field then fills itself in.
+  maybeBackfillPageCount(book);
+
   document.getElementById("bc-cover").src = resolveCoverUrl(book, "L");
   document.getElementById("bc-cover").alt = `Cover of ${book.title}`;
   document.getElementById("bc-series").textContent = book.series
@@ -792,6 +833,7 @@ function openBookCard(id) {
         if (data.coverId) updates.coverId = data.coverId;
         if (data.subjects.length) updates.tags = data.subjects.slice(0, 8);
         if (data.description) updates.description = data.description;
+        if (data.pages && !book.pageCount) updates.pageCount = data.pages;
         await updateDoc(doc(db, "books", book.id), updates);
         statusEl.textContent = "Updated.";
         showToast(`Refreshed "${data.title || book.title}" from OpenLibrary.`);
@@ -1036,7 +1078,7 @@ document.getElementById("add-search").addEventListener("click", async () => {
             description,
             coverId: r.coverId,
             googleCoverUrl,
-            pageCount: gbook?.pageCount ?? null,
+            pageCount: gbook?.pageCount ?? r.pages ?? null,
             workKey: r.workKey,
             source: "manual",
             createdAt: serverTimestamp()
