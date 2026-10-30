@@ -507,9 +507,15 @@ img { max-width: 100%; }
 .reading-velocity { margin-top: 10px; font-size: 12.5px; color: var(--paper-dim); }
 .reading-velocity strong { color: var(--paper); }
 
-/* Multi-axis ratings + calibration readout in the book card */
-.bc-axes-wrap { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
-.bc-axes-wrap:empty { display: none; }
+/* Multi-axis ratings + calibration readout in the book card — collapsed
+   behind a disclosure so the card stays compact until it's needed. */
+.bc-axes-wrap { margin-top: 14px; }
+.bc-collapse-summary { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; font-size: 11px; font-weight: 600; color: var(--paper-dim); text-transform: uppercase; letter-spacing: .07em; list-style: none; }
+.bc-collapse-summary::-webkit-details-marker { display: none; }
+.bc-collapse-summary::after { content: "▸"; font-size: 10px; color: var(--indigo); transition: transform .15s ease; }
+.bc-axes-wrap[open] .bc-collapse-summary::after { transform: rotate(90deg); }
+.bc-axes-hint { font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 11px; }
+.bc-axes-body { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 .bc-axis-row { display: flex; align-items: center; gap: 12px; }
 .bc-axis-name { width: 86px; flex: none; font-size: 11px; font-weight: 600; color: var(--paper-dim); text-transform: uppercase; letter-spacing: .07em; }
 .bc-calibration { margin: 8px 0 0; font-size: 12.5px; color: var(--paper-dim); }
@@ -531,3 +537,8 @@ img { max-width: 100%; }
 .bc-finished-row { display: flex; align-items: center; gap: 12px; }
 .bc-finished-label { margin: 8px 0 0; font-size: 12.5px; color: var(--paper-dim); }
 .bc-finished-input { padding: 6px 8px; background: var(--ink); color: var(--paper); border: 1px solid var(--brass); border-radius: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
+
+/* Page count in the book card */
+.bc-pages-wrap { margin-top: 10px; }
+.bc-pages-wrap:empty { display: none; }
+.bc-pages-num { font-size: 12.5px; color: var(--paper-dim); }

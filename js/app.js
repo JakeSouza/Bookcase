@@ -628,13 +628,20 @@ function openBookCard(id) {
     .map((t) => `<span class="bc-tag">${escapeHtml(t)}</span>`)
     .join("");
 
+  // Page count: shown to everyone once known — the lazy lookup, CSV
+  // import and the drawer's backfill fill it in automatically.
+  const pagesWrap = document.getElementById("bc-pages-wrap");
+  const totalPages = toNum(book.pageCount);
+  pagesWrap.innerHTML = totalPages !== null ? '<span class="bc-pages-num">' + totalPages.toLocaleString() + " pages</span>" : "";
+
   const ratingWrap = document.getElementById("bc-rating-wrap");
   if (book.status === "to-read") {
     const readRated = allBooks.filter((b) => b.status === "read" && toNum(b.rating) !== null);
     // The same calibrated number the shelf shows; the absolute mapping
     // is only a fallback for books the shelf hasn't scored.
     const score = toNum(matchScoreById[book.id]) ?? computeMatchScore(book, readRated);
-    document.getElementById("bc-axes-wrap").innerHTML = "";
+    // No axis ratings for unread books — hide the disclosure entirely.
+    document.getElementById("bc-axes-wrap").hidden = true;
     ratingWrap.innerHTML = `<div class="bc-match-score">${score.toFixed(1)}<span style="font-size:1rem;color:var(--paper-dim)">/5</span></div><div class="bc-match-label">predicted match to your taste</div>`;
   } else {
     ratingWrap.innerHTML = "";
@@ -669,7 +676,9 @@ function openBookCard(id) {
 
     // Multi-axis ratings: plot, characters, prose, pacing, world.
     const axesWrap = document.getElementById("bc-axes-wrap");
-    axesWrap.innerHTML = "";
+    axesWrap.hidden = false;
+    const axesBody = document.getElementById("bc-axes-body");
+    axesBody.innerHTML = "";
     for (const [key, label] of AXES) {
       const row = document.createElement("div");
       row.className = "bc-axis-row";
@@ -691,7 +700,7 @@ function openBookCard(id) {
             showToast("Couldn’t save that rating — check your connection and try again.");
           });
       });
-      axesWrap.appendChild(row);
+      axesBody.appendChild(row);
     }
 
     // Finish date: shown to everyone once set, editable by the
