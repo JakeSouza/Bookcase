@@ -8,7 +8,7 @@ import {
 import { searchBooks, coverUrl, fetchWorkById, getWorkDetails } from "./openlibrary.js";
 import { searchGoogleBooks, fetchGoogleBookById } from "./googlebooks.js";
 import { mergeTags } from "./tag-utils.js";
-import { computeMatchScore, predictRating } from "./taste-match.js";
+import { computeMatchScore, computeMatchScores, predictRating } from "./taste-match.js";
 import { importGoodreadsCSV } from "./csv-import.js";
 
 // ------------------------------------------------------------
@@ -16,6 +16,9 @@ import { importGoodreadsCSV } from "./csv-import.js";
 // ------------------------------------------------------------
 let allBooks = [];
 let isAdmin = false;
+// Book id -> calibrated 0-5 match score from the latest to-read shelf
+// render, so the book card shows the same number the shelf does.
+let matchScoreById = {};
 
 // ------------------------------------------------------------
 // Utilities
@@ -502,7 +505,14 @@ function renderTbrShelf() {
   const tbr = allBooks.filter((b) => b.status === "to-read");
   const avg = seriesAverages(allBooks.filter((b) => b.status === "read"));
 
-  const withScores = tbr.map((b) => ({ ...b, _match: computeMatchScore(b, read) }));
+  // Score the whole queue at once — the calibration layer stretches
+  // the scores across the full 0-5 scale relative to the queue itself.
+  const scores = computeMatchScores(tbr, read);
+  matchScoreById = {};
+  const withScores = tbr.map((b, i) => {
+    matchScoreById[b.id] = scores[i];
+    return { ...b, _match: scores[i] };
+  });
   const mode = document.getElementById("tbr-sort").value;
   renderShelf("tbr-shelf", sortBooks(withScores, mode, avg), "match");
 }
@@ -620,10 +630,10 @@ function openBookCard(id) {
 
   const ratingWrap = document.getElementById("bc-rating-wrap");
   if (book.status === "to-read") {
-    const score = toNum(book._match) ?? computeMatchScore(
-      book,
-      allBooks.filter((b) => b.status === "read" && toNum(b.rating) !== null)
-    );
+    const readRated = allBooks.filter((b) => b.status === "read" && toNum(b.rating) !== null);
+    // The same calibrated number the shelf shows; the absolute mapping
+    // is only a fallback for books the shelf hasn't scored.
+    const score = toNum(matchScoreById[book.id]) ?? computeMatchScore(book, readRated);
     document.getElementById("bc-axes-wrap").innerHTML = "";
     ratingWrap.innerHTML = `<div class="bc-match-score">${score.toFixed(1)}<span style="font-size:1rem;color:var(--paper-dim)">/5</span></div><div class="bc-match-label">predicted match to your taste</div>`;
   } else {
