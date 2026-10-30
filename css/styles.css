@@ -523,3 +523,11 @@ img { max-width: 100%; }
 .yr-best strong { font-weight: 800; }
 .yr-hint { margin: 18px 0 0; font-size: 13px; color: var(--paper-dim); line-height: 1.6; }
 @media (max-width: 640px) { .bc-axis-name { width: 72px; } }
+
+/* Axis star widgets (label survives re-renders) + manual finish dates */
+.bc-axis-stars { display: inline-flex; align-items: center; }
+.bc-finished-wrap { margin-top: 14px; }
+.bc-finished-wrap:empty { display: none; }
+.bc-finished-row { display: flex; align-items: center; gap: 12px; }
+.bc-finished-label { margin: 8px 0 0; font-size: 12.5px; color: var(--paper-dim); }
+.bc-finished-input { padding: 6px 8px; background: var(--ink); color: var(--paper); border: 1px solid var(--brass); border-radius: 6px; font-size: 13px; font-variant-numeric: tabular-nums; }
