@@ -144,7 +144,9 @@ export function importGoodreadsCSV(file, onProgress = () => {}, existingBooks = 
               status,
               rating: status === "read" && goodreadsRating > 0 ? goodreadsRating : null,
               readAt: dateRead,
-              pageCount: csvPageCount,
+              // Fall back to OpenLibrary's median page count when the
+              // CSV row doesn't carry "Number of Pages".
+              pageCount: csvPageCount ?? match?.pages ?? null,
               tags: subjects.length ? subjects.slice(0, 8) : extractTags(row["Bookshelves"]),
               description,
               coverId,
