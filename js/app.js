@@ -668,7 +668,13 @@ function openBookCard(id) {
       name.textContent = label;
       row.appendChild(name);
       const axisVal = toNum(book.axes?.[key]) ?? 0;
-      renderStarRating(row, axisVal, isAdmin, (newVal) => {
+      // renderStarRating clears its container before appending, so the
+      // stars get their own wrapper — the axis label beside them
+      // survives every re-render.
+      const starsEl = document.createElement("span");
+      starsEl.className = "bc-axis-stars";
+      row.appendChild(starsEl);
+      renderStarRating(starsEl, axisVal, isAdmin, (newVal) => {
         updateDoc(doc(db, "books", book.id), { ["axes." + key]: newVal })
           .catch((err) => {
             console.error("Failed to save axis rating:", err);
@@ -676,6 +682,55 @@ function openBookCard(id) {
           });
       });
       axesWrap.appendChild(row);
+    }
+
+    // Finish date: shown to everyone once set, editable by the
+    // librarian — this is how previously-read books get backfilled
+    // with their real dates (the Year in Review reads it).
+    const finishedWrap = document.getElementById("bc-finished-wrap");
+    finishedWrap.innerHTML = "";
+    const finishedAt = toNum(book.readAt);
+    if (isAdmin && (book.status === "read" || finishedAt !== null)) {
+      const fRow = document.createElement("div");
+      fRow.className = "bc-finished-row";
+      const fName = document.createElement("span");
+      fName.className = "bc-axis-name";
+      fName.textContent = "Finished on";
+      fRow.appendChild(fName);
+      const fInput = document.createElement("input");
+      fInput.type = "date";
+      fInput.className = "bc-finished-input";
+      fInput.title = "Set the date you finished this book";
+      if (finishedAt !== null) {
+        const d = new Date(finishedAt);
+        fInput.value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+      }
+      fInput.addEventListener("change", () => {
+        if (fInput.value) {
+          const t = new Date(fInput.value + "T00:00:00").getTime();
+          if (Number.isFinite(t)) {
+            updateDoc(doc(db, "books", book.id), { readAt: t })
+              .catch((err) => {
+                console.error("Failed to save finish date:", err);
+                showToast("Couldn’t save the finish date — check your connection and try again.");
+              });
+          }
+        } else {
+          // Cleared: forget the stored date (re-reads and mistakes happen).
+          updateDoc(doc(db, "books", book.id), { readAt: null })
+            .catch((err) => {
+              console.error("Failed to clear finish date:", err);
+              showToast("Couldn’t clear the finish date — check your connection and try again.");
+            });
+        }
+      });
+      fRow.appendChild(fInput);
+      finishedWrap.appendChild(fRow);
+    } else if (finishedAt !== null) {
+      const fLabel = document.createElement("p");
+      fLabel.className = "bc-finished-label";
+      fLabel.textContent = "Finished on " + new Date(finishedAt).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }) + ".";
+      finishedWrap.appendChild(fLabel);
     }
   }
 
